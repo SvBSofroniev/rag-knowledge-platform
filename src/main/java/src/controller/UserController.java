@@ -4,8 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import src.auth.repository.UserRepository;
 import src.entity.User;
-import src.repository.UserRepository;
 
 import java.util.List;
 
