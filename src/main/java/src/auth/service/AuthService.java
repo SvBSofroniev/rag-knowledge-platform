@@ -5,7 +5,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import src.auth.dto.AuthResponse;
 import src.auth.dto.LoginRequest;
+import src.auth.dto.RefreshTokenRequest;
 import src.auth.dto.RegisterRequest;
+import src.auth.entity.RefreshToken;
 import src.auth.jwt.JwtService;
 import src.auth.repository.UserRepository;
 import src.entity.User;
@@ -19,6 +21,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
@@ -41,15 +44,10 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
 
-        String token = jwtService.generateToken(savedUser);
+        String accessToken = jwtService.generateToken(savedUser);
+        String refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
-        return new AuthResponse(
-                token,
-                savedUser.getId(),
-                savedUser.getUsername(),
-                savedUser.getEmail(),
-                savedUser.getRole()
-        );
+        return buildAuthResponse(savedUser, accessToken, refreshToken);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -68,10 +66,30 @@ public class AuthService {
             throw new RuntimeException("Account is locked");
         }
 
-        String token = jwtService.generateToken(user);
+        String accessToken = jwtService.generateToken(user);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
 
+        return buildAuthResponse(user, accessToken, refreshToken);
+    }
+
+    public AuthResponse refresh(RefreshTokenRequest request) {
+        RefreshToken refreshToken = refreshTokenService.validateRefreshToken(request.refreshToken());
+
+        User user = refreshToken.getUser();
+
+        String newAccessToken = jwtService.generateToken(user);
+
+        return buildAuthResponse(user, newAccessToken, request.refreshToken());
+    }
+
+    public void logout(RefreshTokenRequest request) {
+        refreshTokenService.revokeRefreshToken(request.refreshToken());
+    }
+
+    private AuthResponse buildAuthResponse(User user, String accessToken, String refreshToken) {
         return new AuthResponse(
-                token,
+                accessToken,
+                refreshToken,
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
