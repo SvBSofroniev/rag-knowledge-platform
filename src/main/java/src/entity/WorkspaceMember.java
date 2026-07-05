@@ -1,28 +1,43 @@
 package src.entity;
 
 import jakarta.persistence.*;
-import src.entity.embeddable.WorkspaceMemberId;
+import lombok.Getter;
+import lombok.Setter;
+import src.workspace.util.WorkspaceRole;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "workspace_members")
+@Getter
+@Setter
+@Table(
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"workspace_id", "user_id"})
+        },
+        name = "workspace_members"
+)
 public class WorkspaceMember {
 
-    @EmbeddedId
-    private WorkspaceMemberId id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("workspaceId")
-    @JoinColumn(name = "workspace_id")
+    @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("userId")
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    private String role;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private WorkspaceRole role;
 
     private LocalDateTime joinedAt;
+
+    @PrePersist
+    void onCreate() {
+        joinedAt = LocalDateTime.now();
+    }
 }
