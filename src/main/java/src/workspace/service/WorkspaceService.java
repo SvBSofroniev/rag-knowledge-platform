@@ -14,6 +14,7 @@ import src.workspace.repository.WorkspaceRepository;
 import src.workspace.util.WorkspaceRole;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -60,7 +61,7 @@ public class WorkspaceService {
                 .toList();
     }
 
-    public WorkspaceResponse getWorkspace(String workspaceId, User currentUser) {
+    public WorkspaceResponse getWorkspace(UUID workspaceId, User currentUser) {
         WorkspaceMember member = permissionService.requireMember(workspaceId, currentUser);
         Workspace workspace = member.getWorkspace();
 
@@ -73,7 +74,7 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public void addMember(String workspaceId, AddWorkspaceMemberRequest request, User currentUser) {
+    public void addMember(UUID workspaceId, AddWorkspaceMemberRequest request, User currentUser) {
         WorkspaceMember currentMember = permissionService.requireAdminOrOwner(workspaceId, currentUser);
         Workspace workspace = currentMember.getWorkspace();
 
@@ -94,7 +95,7 @@ public class WorkspaceService {
 
     @Transactional
     public void updateMemberRole(
-            String workspaceId,
+            UUID workspaceId,
             String memberId,
             UpdateWorkspaceRoleRequest request,
             User currentUser
@@ -121,7 +122,7 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public void removeMember(String workspaceId, String memberId, User currentUser) {
+    public void removeMember(UUID workspaceId, String memberId, User currentUser) {
         permissionService.requireAdminOrOwner(workspaceId, currentUser);
 
         WorkspaceMember targetMember = memberRepository.findById(memberId)
@@ -139,7 +140,7 @@ public class WorkspaceService {
     }
 
     public List<WorkspaceMemberResponse> getWorkspaceMembers(
-            String workspaceId,
+            UUID workspaceId,
             User currentUser
     ) {
         WorkspaceMember currentMember = permissionService.requireMember(workspaceId, currentUser);

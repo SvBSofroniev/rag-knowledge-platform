@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record WorkspaceMemberResponse(
-        String memberId,
+        UUID memberId,
         UUID userId,
         String username,
         String email,

@@ -1,29 +1,32 @@
 package src.entity;
 
 import jakarta.persistence.*;
-
-import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
+@Table(name = "workspaces")
 @Getter
 @Setter
 public class Workspace {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+    private UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_id", nullable = false)
+    @JoinColumn(name = "owner_id", nullable = false)
     private User createdBy;
 
     @OneToMany(
@@ -33,17 +36,20 @@ public class Workspace {
     )
     private List<WorkspaceMember> members = new ArrayList<>();
 
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     @PrePersist
-    void onCreate() {
+    public void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate
-    void onUpdate() {
+    public void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 }

@@ -8,6 +8,7 @@ import src.workspace.dto.*;
 import src.workspace.service.WorkspaceService;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/workspaces")
@@ -33,7 +34,7 @@ public class WorkspaceController {
 
     @GetMapping("/{workspaceId}")
     public WorkspaceResponse getWorkspace(
-            @PathVariable String workspaceId,
+            @PathVariable UUID workspaceId,
             @AuthenticationPrincipal User currentUser
     ) {
         return workspaceService.getWorkspace(workspaceId, currentUser);
@@ -41,7 +42,7 @@ public class WorkspaceController {
 
     @GetMapping("/{workspaceId}/members")
     public List<WorkspaceMemberResponse> getWorkspaceMembers(
-            @PathVariable String workspaceId,
+            @PathVariable UUID workspaceId,
             @AuthenticationPrincipal User currentUser
     ) {
         return workspaceService.getWorkspaceMembers(workspaceId, currentUser);
@@ -49,7 +50,7 @@ public class WorkspaceController {
 
     @PostMapping("/{workspaceId}/members")
     public void addMember(
-            @PathVariable String workspaceId,
+            @PathVariable UUID workspaceId,
             @RequestBody AddWorkspaceMemberRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
@@ -58,7 +59,7 @@ public class WorkspaceController {
 
     @PatchMapping("/{workspaceId}/members/{memberId}")
     public void updateMemberRole(
-            @PathVariable String workspaceId,
+            @PathVariable UUID workspaceId,
             @PathVariable String memberId,
             @RequestBody UpdateWorkspaceRoleRequest request,
             @AuthenticationPrincipal User currentUser
@@ -68,7 +69,7 @@ public class WorkspaceController {
 
     @DeleteMapping("/{workspaceId}/members/{memberId}")
     public void removeMember(
-            @PathVariable String workspaceId,
+            @PathVariable UUID workspaceId,
             @PathVariable String memberId,
             @AuthenticationPrincipal User currentUser
     ) {

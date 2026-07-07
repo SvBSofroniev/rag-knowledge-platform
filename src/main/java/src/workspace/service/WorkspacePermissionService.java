@@ -9,6 +9,8 @@ import src.workspace.repository.WorkspaceMemberRepository;
 import src.workspace.repository.WorkspaceRepository;
 import src.workspace.util.WorkspaceRole;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class WorkspacePermissionService {
@@ -16,7 +18,7 @@ public class WorkspacePermissionService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMemberRepository memberRepository;
 
-    public Workspace getWorkspaceOrThrow(String workspaceId) {
+    public Workspace getWorkspaceOrThrow(UUID workspaceId) {
         return workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new RuntimeException("Workspace not found"));
     }
@@ -26,12 +28,12 @@ public class WorkspacePermissionService {
                 .orElseThrow(() -> new RuntimeException("You are not a member of this workspace"));
     }
 
-    public WorkspaceMember requireMember(String workspaceId, User user) {
+    public WorkspaceMember requireMember(UUID workspaceId, User user) {
         Workspace workspace = getWorkspaceOrThrow(workspaceId);
         return getMemberOrThrow(workspace, user);
     }
 
-    public WorkspaceMember requireAdminOrOwner(String workspaceId, User user) {
+    public WorkspaceMember requireAdminOrOwner(UUID workspaceId, User user) {
         WorkspaceMember member = requireMember(workspaceId, user);
 
         if (member.getRole() != WorkspaceRole.ADMIN &&
@@ -42,7 +44,7 @@ public class WorkspacePermissionService {
         return member;
     }
 
-    public WorkspaceMember requireOwner(String workspaceId, User user) {
+    public WorkspaceMember requireOwner(UUID workspaceId, User user) {
         WorkspaceMember member = requireMember(workspaceId, user);
 
         if (member.getRole() != WorkspaceRole.OWNER) {
@@ -52,7 +54,7 @@ public class WorkspacePermissionService {
         return member;
     }
 
-    public boolean isMember(String workspaceId, User user) {
+    public boolean isMember(UUID workspaceId, User user) {
         Workspace workspace = getWorkspaceOrThrow(workspaceId);
         return memberRepository.existsByWorkspaceAndUser(workspace, user);
     }
