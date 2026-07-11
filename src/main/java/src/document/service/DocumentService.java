@@ -21,9 +21,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DocumentService {
 
-    private final DocumentRepository documentRepository;
     private final FileStorageService fileStorageService;
     private final WorkspacePermissionService permissionService;
+    private final DocumentRepository documentRepository;
 
     @Transactional
     public DocumentResponse uploadDocument(
@@ -31,29 +31,44 @@ public class DocumentService {
             MultipartFile file,
             User currentUser
     ) {
-        WorkspaceMember member = permissionService.requireMember(workspaceId, currentUser);
+        WorkspaceMember member =
+                permissionService.requireMember(workspaceId, currentUser);
+
         Workspace workspace = member.getWorkspace();
 
-        if (file.isEmpty()) {
+        if (file == null || file.isEmpty()) {
             throw new RuntimeException("File is empty");
         }
 
-        FileStorageService.StoredFile storedFile = fileStorageService.store(file);
+        String originalFilename = file.getOriginalFilename();
 
-        Document document = new Document();
-        document.setWorkspace(workspace);
-        document.setUploadedBy(currentUser);
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new RuntimeException("File name is missing");
+        }
 
-        document.setTitle(file.getOriginalFilename());
-        document.setOriginalFilename(file.getOriginalFilename());
-        document.setStoragePath(storedFile.filePath());
-        document.setFileType(file.getContentType());
-        document.setFileSize(file.getSize());
-        document.setStatus(DocumentStatus.UPLOADED);
+        FileStorageService.StoredFile storedFile =
+                fileStorageService.store(file);
 
-        Document saved = documentRepository.save(document);
+        try {
+            Document document = new Document();
+            document.setWorkspace(workspace);
+            document.setUploadedBy(currentUser);
+            document.setTitle(originalFilename);
+            document.setOriginalFilename(originalFilename);
+            document.setFileType(resolveFileType(file));
+            document.setFileSize(file.getSize());
+            document.setStoragePath(storedFile.filePath());
+            document.setStatus(DocumentStatus.PENDING);
+            document.setProcessingError(null);
 
-        return toResponse(saved);
+            Document saved = documentRepository.saveAndFlush(document);
+
+            return toResponse(saved);
+
+        } catch (RuntimeException exception) {
+            fileStorageService.delete(storedFile.filePath());
+            throw exception;
+        }
     }
 
     public List<DocumentResponse> getWorkspaceDocuments(
@@ -113,16 +128,28 @@ public class DocumentService {
                 .orElseThrow(() -> new RuntimeException("Document not found"));
     }
 
-    private DocumentResponse toResponse(Document document) {
+    public DocumentResponse toResponse(Document document) {
         return new DocumentResponse(
                 document.getId(),
+                document.getTitle(),
                 document.getOriginalFilename(),
                 document.getFileType(),
                 document.getFileSize(),
                 document.getStatus(),
+                document.getProcessingError(),
                 document.getUploadedBy().getId(),
                 document.getUploadedBy().getUsername(),
                 document.getCreatedAt()
         );
+    }
+
+    private String resolveFileType(MultipartFile file) {
+        String contentType = file.getContentType();
+
+        if (contentType == null || contentType.isBlank()) {
+            return "application/octet-stream";
+        }
+
+        return contentType;
     }
 }

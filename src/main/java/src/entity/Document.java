@@ -6,6 +6,8 @@ import lombok.Setter;
 import src.document.util.DocumentStatus;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Setter
@@ -44,6 +46,16 @@ public class Document {
     @Enumerated(EnumType.STRING)
     @Column(name = "upload_status", nullable = false, length = 20)
     private DocumentStatus status = DocumentStatus.PENDING;
+
+    @Column(name = "processing_error", columnDefinition = "TEXT")
+    private String processingError;
+
+    @OneToMany(
+            mappedBy = "document",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<DocumentChunk> chunks = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import src.document.dto.DocumentResponse;
 import src.document.service.DocumentService;
+import src.document.service.DocumentUploadService;
 import src.entity.User;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentUploadService documentUploadService;
 
     @PostMapping("/workspaces/{workspaceId}/documents")
     public DocumentResponse uploadDocument(
@@ -24,7 +26,11 @@ public class DocumentController {
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User currentUser
     ) {
-        return documentService.uploadDocument(workspaceId, file, currentUser);
+        return documentUploadService.uploadAndProcess(
+                workspaceId,
+                file,
+                currentUser
+        );
     }
 
     @GetMapping("/workspaces/{workspaceId}/documents")
@@ -32,7 +38,10 @@ public class DocumentController {
             @PathVariable UUID workspaceId,
             @AuthenticationPrincipal User currentUser
     ) {
-        return documentService.getWorkspaceDocuments(workspaceId, currentUser);
+        return documentService.getWorkspaceDocuments(
+                workspaceId,
+                currentUser
+        );
     }
 
     @GetMapping("/documents/{documentId}")
@@ -40,7 +49,10 @@ public class DocumentController {
             @PathVariable UUID documentId,
             @AuthenticationPrincipal User currentUser
     ) {
-        return documentService.getDocument(documentId, currentUser);
+        return documentService.getDocument(
+                documentId,
+                currentUser
+        );
     }
 
     @DeleteMapping("/documents/{documentId}")
@@ -48,6 +60,9 @@ public class DocumentController {
             @PathVariable UUID documentId,
             @AuthenticationPrincipal User currentUser
     ) {
-        documentService.deleteDocument(documentId, currentUser);
+        documentService.deleteDocument(
+                documentId,
+                currentUser
+        );
     }
 }

@@ -7,10 +7,12 @@ import java.util.UUID;
 
 public record DocumentResponse(
         UUID id,
+        String title,
         String originalFilename,
-        String mimeType,
-        Long size,
+        String fileType,
+        Long fileSize,
         DocumentStatus status,
+        String processingError,
         UUID uploadedById,
         String uploadedByUsername,
         LocalDateTime createdAt

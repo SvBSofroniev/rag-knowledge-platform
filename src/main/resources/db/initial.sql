@@ -60,6 +60,9 @@ CREATE TABLE documents (
         ON DELETE RESTRICT
 );
 
+ALTER TABLE documents
+ADD COLUMN processing_error TEXT;
+
 CREATE TABLE document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL,
@@ -72,6 +75,8 @@ CREATE TABLE document_chunks (
         ON DELETE CASCADE,
     CONSTRAINT uk_document_chunk UNIQUE (document_id, chunk_index)
 );
+CREATE INDEX idx_document_chunks_document_id
+ON document_chunks(document_id);
 
 CREATE TABLE chunk_embeddings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

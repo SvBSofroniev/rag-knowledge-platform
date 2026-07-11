@@ -1,8 +1,8 @@
 package src.document.util;
 
 public enum DocumentStatus {
-    UPLOADED,
     PENDING,
+    PROCESSING,
     READY,
     FAILED
 }
