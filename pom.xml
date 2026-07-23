@@ -13,6 +13,8 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <java.version>21</java.version>
+        <tika.version>3.3.1</tika.version>
     </properties>
 
     <parent>
@@ -78,6 +80,18 @@
             <artifactId>lombok</artifactId>
             <version>1.18.46</version>
             <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>${tika.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>${tika.version}</version>
         </dependency>
 
     </dependencies>

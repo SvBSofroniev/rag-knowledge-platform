@@ -1,10 +1,14 @@
 package src.document.service;
 
+import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.metadata.TikaCoreProperties;
 import org.springframework.stereotype.Service;
 import src.entity.Document;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
@@ -12,18 +16,94 @@ import java.util.Set;
 @Service
 public class DocumentTextExtractor {
 
-    private static final Set<String> SUPPORTED_TYPES = Set.of(
-            "text/plain",
-            "text/markdown"
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of(
+            "pdf",
+            "docx",
+            "txt",
+            "md",
+            "markdown"
     );
 
+    private final Tika tika = new Tika();
+
     public String extract(Document document) {
-        validateFileType(document);
+        validateDocument(document);
 
         Path path = Path.of(document.getStoragePath())
                 .toAbsolutePath()
                 .normalize();
 
+        validateStoredFile(path);
+
+        Metadata metadata = new Metadata();
+
+        if (document.getOriginalFilename() != null) {
+            metadata.set(
+                    TikaCoreProperties.RESOURCE_NAME_KEY,
+                    document.getOriginalFilename()
+            );
+        }
+
+        try (InputStream inputStream = Files.newInputStream(path)) {
+            String extractedText = tika.parseToString(
+                    inputStream,
+                    metadata
+            );
+
+            if (extractedText == null || extractedText.isBlank()) {
+                throw new RuntimeException(
+                        "Document contains no extractable text"
+                );
+            }
+
+            return extractedText.trim();
+
+        } catch (IOException exception) {
+            throw new RuntimeException(
+                    "Failed to read the stored document",
+                    exception
+            );
+
+        } catch (TikaException exception) {
+            throw new RuntimeException(
+                    "Failed to extract text from the document",
+                    exception
+            );
+        }
+    }
+
+    private void validateDocument(Document document) {
+        if (document == null) {
+            throw new IllegalArgumentException(
+                    "Document cannot be null"
+            );
+        }
+
+        if (document.getStoragePath() == null ||
+                document.getStoragePath().isBlank()) {
+            throw new RuntimeException(
+                    "Document storage path is missing"
+            );
+        }
+
+        String filename = document.getOriginalFilename();
+
+        if (filename == null || filename.isBlank()) {
+            throw new RuntimeException(
+                    "Document filename is missing"
+            );
+        }
+
+        String extension = getExtension(filename);
+
+        if (!SUPPORTED_EXTENSIONS.contains(extension)) {
+            throw new RuntimeException(
+                    "Unsupported document extension: " + extension
+            );
+        }
+    }
+
+    private void validateStoredFile(Path path) {
         if (!Files.exists(path)) {
             throw new RuntimeException(
                     "Stored document file does not exist"
@@ -32,57 +112,27 @@ public class DocumentTextExtractor {
 
         if (!Files.isRegularFile(path)) {
             throw new RuntimeException(
-                    "Document storage path does not point to a file"
+                    "Document storage path is not a regular file"
             );
         }
 
-        try {
-            String text = Files.readString(
-                    path,
-                    StandardCharsets.UTF_8
-            );
-
-            if (text.isBlank()) {
-                throw new RuntimeException(
-                        "Document contains no extractable text"
-                );
-            }
-
-            return text;
-
-        } catch (IOException exception) {
+        if (!Files.isReadable(path)) {
             throw new RuntimeException(
-                    "Failed to read stored document",
-                    exception
+                    "Stored document file is not readable"
             );
         }
     }
 
-    private void validateFileType(Document document) {
-        String fileType = document.getFileType();
+    private String getExtension(String filename) {
+        int lastDotIndex = filename.lastIndexOf('.');
 
-        if (fileType != null && SUPPORTED_TYPES.contains(fileType)) {
-            return;
+        if (lastDotIndex < 0 ||
+                lastDotIndex == filename.length() - 1) {
+            return "";
         }
 
-        /*
-         * Some clients send application/octet-stream for Markdown
-         * or plain-text files, so also inspect the filename.
-         */
-        String filename = document.getOriginalFilename();
-
-        if (filename != null) {
-            String lowercaseName = filename.toLowerCase();
-
-            if (lowercaseName.endsWith(".txt") ||
-                    lowercaseName.endsWith(".md") ||
-                    lowercaseName.endsWith(".markdown")) {
-                return;
-            }
-        }
-
-        throw new RuntimeException(
-                "Unsupported document type: " + fileType
-        );
+        return filename
+                .substring(lastDotIndex + 1)
+                .toLowerCase();
     }
 }

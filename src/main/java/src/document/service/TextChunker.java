@@ -124,8 +124,19 @@ public class TextChunker {
         return text
                 .replace("\r\n", "\n")
                 .replace('\r', '\n')
+
+                // Preserve actual paragraph breaks temporarily.
+                .replaceAll("\\n\\s*\\n+", "<PARAGRAPH_BREAK>")
+
+                // Join PDF visual line wrapping.
+                .replaceAll("\\s*\\n\\s*", " ")
+
+                // Restore paragraph breaks.
+                .replace("<PARAGRAPH_BREAK>", "\n\n")
+
+                // Normalize repeated spaces.
                 .replaceAll("[\\t ]+", " ")
-                .replaceAll("\\n{3,}", "\n\n")
+
                 .trim();
     }
 }
