@@ -35,18 +35,26 @@ public class DocumentChunkPersistenceService {
 
         List<DocumentChunk> chunks = new ArrayList<>();
 
-        for (int index = 0; index < chunkContents.size(); index++) {
-            String content = chunkContents.get(index);
+        for (String content : chunkContents) {
+            if (content == null || content.isBlank()) {
+                continue;
+            }
 
             DocumentChunk chunk = new DocumentChunk();
             chunk.setDocument(document);
-            chunk.setChunkIndex(index);
+            chunk.setChunkIndex(chunks.size());
             chunk.setContent(content);
             chunk.setTokenCount(
                     tokenCountEstimator.estimate(content)
             );
 
             chunks.add(chunk);
+        }
+
+        if (chunks.isEmpty()) {
+            throw new RuntimeException(
+                    "No valid document chunks to store"
+            );
         }
 
         chunkRepository.saveAll(chunks);

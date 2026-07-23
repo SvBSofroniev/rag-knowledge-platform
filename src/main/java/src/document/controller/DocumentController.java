@@ -5,8 +5,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import src.document.dto.DocumentResponse;
+import src.document.service.DocumentIngestionService;
 import src.document.service.DocumentService;
-import src.document.service.DocumentUploadService;
 import src.entity.User;
 
 import java.util.List;
@@ -18,7 +18,7 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
-    private final DocumentUploadService documentUploadService;
+    private final DocumentIngestionService documentIngestionService;
 
     @PostMapping("/workspaces/{workspaceId}/documents")
     public DocumentResponse uploadDocument(
@@ -26,7 +26,7 @@ public class DocumentController {
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User currentUser
     ) {
-        return documentUploadService.uploadAndProcess(
+        return documentIngestionService.ingest(
                 workspaceId,
                 file,
                 currentUser
