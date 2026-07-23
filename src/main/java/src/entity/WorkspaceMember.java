@@ -8,14 +8,23 @@ import src.workspace.util.WorkspaceRole;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Entity
 @Getter
 @Setter
+@Entity
 @Table(
+        name = "workspace_members",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"workspace_id", "user_id"})
+                @UniqueConstraint(
+                        name = "uk_workspace_member",
+                        columnNames = {"workspace_id", "user_id"}
+                )
         },
-        name = "workspace_members"
+        indexes = {
+                @Index(
+                        name = "idx_workspace_members_user",
+                        columnList = "user_id"
+                )
+        }
 )
 public class WorkspaceMember {
 
@@ -23,22 +32,35 @@ public class WorkspaceMember {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private WorkspaceRole role;
+    @Column(
+            name = "role",
+            nullable = false,
+            length = 20
+    )
+    private WorkspaceRole role = WorkspaceRole.MEMBER;
 
+    @Column(
+            name = "joined_at",
+            nullable = false,
+            updatable = false
+    )
     private LocalDateTime joinedAt;
 
     @PrePersist
-    void onCreate() {
+    protected void onCreate() {
         joinedAt = LocalDateTime.now();
+
+        if (role == null) {
+            role = WorkspaceRole.MEMBER;
+        }
     }
 }

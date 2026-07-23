@@ -9,24 +9,42 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Entity
-@Table(name = "workspaces")
 @Getter
 @Setter
+@Entity
+@Table(
+        name = "workspaces",
+        indexes = {
+                @Index(
+                        name = "idx_workspaces_created_by",
+                        columnList = "created_by_id"
+                )
+        }
+)
 public class Workspace {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, length = 100)
+    @Column(
+            name = "name",
+            nullable = false,
+            length = 100
+    )
     private String name;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(
+            name = "description",
+            columnDefinition = "TEXT"
+    )
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(
+            name = "created_by_id",
+            nullable = false
+    )
     private User createdBy;
 
     @OneToMany(
@@ -36,20 +54,29 @@ public class Workspace {
     )
     private List<WorkspaceMember> members = new ArrayList<>();
 
-    @Column(name = "created_at", nullable = false)
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(
+            name = "updated_at",
+            nullable = false
+    )
     private LocalDateTime updatedAt;
 
     @PrePersist
-    public void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+
+        createdAt = now;
+        updatedAt = now;
     }
 
     @PreUpdate
-    public void onUpdate() {
+    protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 }

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.document.repository.DocumentChunkRepository;
 import src.document.repository.DocumentRepository;
+import src.embedding.service.EmbeddingService;
 import src.entity.Document;
 import src.entity.DocumentChunk;
 
@@ -19,6 +20,7 @@ public class DocumentChunkPersistenceService {
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository chunkRepository;
     private final TokenCountEstimator tokenCountEstimator;
+    private final EmbeddingService embeddingService;
 
     @Transactional
     public void replaceChunks(
@@ -40,6 +42,9 @@ public class DocumentChunkPersistenceService {
                 continue;
             }
 
+            float[] embedding =
+                    embeddingService.generateEmbedding(content);
+
             DocumentChunk chunk = new DocumentChunk();
             chunk.setDocument(document);
             chunk.setChunkIndex(chunks.size());
@@ -47,6 +52,7 @@ public class DocumentChunkPersistenceService {
             chunk.setTokenCount(
                     tokenCountEstimator.estimate(content)
             );
+            chunk.setEmbedding(embedding);
 
             chunks.add(chunk);
         }
@@ -58,5 +64,6 @@ public class DocumentChunkPersistenceService {
         }
 
         chunkRepository.saveAll(chunks);
+        chunkRepository.flush();
     }
 }

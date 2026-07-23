@@ -10,25 +10,41 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "chat_sessions")
+@Table(
+        name = "chat_sessions",
+        indexes = {
+                @Index(
+                        name = "idx_chat_sessions_workspace",
+                        columnList = "workspace_id"
+                ),
+                @Index(
+                        name = "idx_chat_sessions_user",
+                        columnList = "user_id"
+                )
+        }
+)
 public class ChatSession {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(length = 255)
+    @Column(name = "title", length = 255)
     private String title;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
@@ -36,13 +52,14 @@ public class ChatSession {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+
+        createdAt = now;
+        updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
-
 }
