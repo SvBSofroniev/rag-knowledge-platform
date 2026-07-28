@@ -3,12 +3,14 @@ package src.chat.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import src.chat.dto.ChatAnswerResponse;
 import src.chat.dto.ChatMessageResponse;
 import src.chat.dto.SendChatMessageRequest;
 import src.chat.repository.AiQueryRepository;
 import src.chat.repository.ChatMessageRepository;
 import src.chat.repository.ChatSessionRepository;
+import src.common.exception.BadRequestException;
 import src.entity.AiQuery;
 import src.entity.ChatMessage;
 import src.entity.ChatSession;
@@ -28,6 +30,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ChatMessageService {
 
+    private static final int MAX_MESSAGE_LENGTH = 5_000;
+
     private final ChatSessionService chatSessionService;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatSessionRepository chatSessionRepository;
@@ -38,11 +42,14 @@ public class ChatMessageService {
     @Value("${spring.ai.ollama.chat.model:gemma3:4b}")
     private String chatModelName;
 
+    @Transactional
     public ChatAnswerResponse sendMessage(
             UUID sessionId,
             SendChatMessageRequest request,
             User currentUser
     ) {
+        validateRequest(request);
+
         ChatSession session =
                 chatSessionService.getAccessibleSession(
                         sessionId,
@@ -52,8 +59,9 @@ public class ChatMessageService {
         String question = request.message().trim();
 
         /*
-         * Load previous messages before saving the current question,
-         * otherwise the question would appear twice in the prompt.
+         * Load previous messages before saving the current question.
+         * Otherwise, the current question would appear twice in
+         * the conversation context.
          */
         List<ConversationMessage> conversationHistory =
                 loadRecentConversation(session);
@@ -65,9 +73,8 @@ public class ChatMessageService {
         );
 
         List<UUID> attachedDocumentIds =
-                chatDocumentContextService.getAttachedDocumentIds(
-                        session
-                );
+                chatDocumentContextService
+                        .getAttachedDocumentIds(session);
 
         long startedAt = System.nanoTime();
 
@@ -106,6 +113,32 @@ public class ChatMessageService {
         );
     }
 
+    private void validateRequest(
+            SendChatMessageRequest request
+    ) {
+        if (request == null) {
+            throw new BadRequestException(
+                    "Message request cannot be empty"
+            );
+        }
+
+        String message = request.message();
+
+        if (message == null || message.isBlank()) {
+            throw new BadRequestException(
+                    "Message cannot be empty"
+            );
+        }
+
+        if (message.trim().length() > MAX_MESSAGE_LENGTH) {
+            throw new BadRequestException(
+                    "Message cannot exceed " +
+                            MAX_MESSAGE_LENGTH +
+                            " characters"
+            );
+        }
+    }
+
     private ChatMessage saveMessage(
             ChatSession session,
             SenderType senderType,
@@ -134,11 +167,13 @@ public class ChatMessageService {
             long responseTimeMs
     ) {
         AiQuery aiQuery = new AiQuery();
+
         aiQuery.setUser(currentUser);
         aiQuery.setChatSession(session);
         aiQuery.setQueryText(question);
         aiQuery.setResponseText(answer);
         aiQuery.setModelName(chatModelName);
+
         aiQuery.setResponseTimeMs(
                 Math.toIntExact(
                         Math.min(
@@ -149,9 +184,9 @@ public class ChatMessageService {
         );
 
         /*
-         * Token counts remain null for now because the current
-         * local Ollama integration does not yet expose them
-         * through RagAnswerResponse.
+         * Token counts remain null because the current
+         * Ollama integration does not expose them through
+         * RagAnswerResponse.
          */
         aiQuery.setPromptTokens(null);
         aiQuery.setCompletionTokens(null);
@@ -176,11 +211,13 @@ public class ChatMessageService {
     ) {
         List<ChatMessage> messages = new ArrayList<>(
                 chatMessageRepository
-                        .findTop10BySessionOrderByCreatedAtDesc(session)
+                        .findTop10BySessionOrderByCreatedAtDesc(
+                                session
+                        )
         );
 
         /*
-         * The database query returns newest-first.
+         * The repository returns newest-first.
          * The model should receive oldest-to-newest.
          */
         Collections.reverse(messages);
@@ -188,7 +225,8 @@ public class ChatMessageService {
         return messages.stream()
                 .filter(message ->
                         message.getSenderType() == SenderType.USER ||
-                                message.getSenderType() == SenderType.ASSISTANT
+                                message.getSenderType() ==
+                                        SenderType.ASSISTANT
                 )
                 .filter(message ->
                         message.getContent() != null &&

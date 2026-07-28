@@ -10,9 +10,12 @@ import src.auth.dto.RegisterRequest;
 import src.auth.entity.RefreshToken;
 import src.auth.jwt.JwtService;
 import src.auth.repository.UserRepository;
+import src.common.exception.ConflictException;
+import src.common.exception.UnauthorizedException;
 import src.entity.User;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -24,18 +27,30 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
 
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
-            throw new RuntimeException("Email already exists");
+        String normalizedEmail =
+                request.email().trim().toLowerCase();
+
+        String normalizedUsername =
+                request.username().trim();
+
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new ConflictException(
+                    "An account with this email already exists"
+            );
         }
 
-        if (userRepository.existsByUsername(request.username())) {
-            throw new RuntimeException("Username already exists");
+        if (userRepository.existsByUsername(normalizedUsername)) {
+            throw new ConflictException(
+                    "An account with this username already exists"
+            );
         }
 
         User user = new User();
-        user.setUsername(request.username());
-        user.setEmail(request.email());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setUsername(normalizedUsername);
+        user.setEmail(normalizedEmail);
+        user.setPasswordHash(
+                passwordEncoder.encode(request.password())
+        );
         user.setRole("USER");
         user.setEnabled(true);
         user.setAccountNonLocked(true);
@@ -44,42 +59,87 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
 
-        String accessToken = jwtService.generateToken(savedUser);
-        String refreshToken = refreshTokenService.createRefreshToken(savedUser);
+        String accessToken =
+                jwtService.generateToken(savedUser);
+
+        String refreshToken =
+                refreshTokenService.createRefreshToken(savedUser);
 
         return buildAuthResponse(savedUser, accessToken, refreshToken);
     }
 
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+        String normalizedEmail = request.email()
+                .trim()
+                .toLowerCase(Locale.ROOT);
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new RuntimeException("Invalid email or password");
+        User user = userRepository
+                .findByEmail(normalizedEmail)
+                .orElseThrow(() ->
+                        new UnauthorizedException(
+                                "Invalid email or password"
+                        )
+                );
+
+        if (!passwordEncoder.matches(
+                request.password(),
+                user.getPasswordHash()
+        )) {
+            throw new UnauthorizedException(
+                    "Invalid email or password"
+            );
         }
 
         if (!user.isEnabled()) {
-            throw new RuntimeException("Account is disabled");
+            throw new UnauthorizedException(
+                    "Account is disabled"
+            );
         }
 
         if (!user.isAccountNonLocked()) {
-            throw new RuntimeException("Account is locked");
+            throw new UnauthorizedException(
+                    "Account is locked"
+            );
         }
 
-        String accessToken = jwtService.generateToken(user);
-        String refreshToken = refreshTokenService.createRefreshToken(user);
+        String accessToken =
+                jwtService.generateToken(user);
 
-        return buildAuthResponse(user, accessToken, refreshToken);
+        String refreshToken =
+                refreshTokenService.createRefreshToken(user);
+
+        return buildAuthResponse(
+                user,
+                accessToken,
+                refreshToken
+        );
     }
 
-    public AuthResponse refresh(RefreshTokenRequest request) {
-        RefreshToken refreshToken = refreshTokenService.validateRefreshToken(request.refreshToken());
+    public AuthResponse refresh(
+            RefreshTokenRequest request
+    ) {
+        RefreshToken currentToken =
+                refreshTokenService.validateRefreshToken(
+                        request.refreshToken()
+                );
 
-        User user = refreshToken.getUser();
+        User user = currentToken.getUser();
 
-        String newAccessToken = jwtService.generateToken(user);
+        refreshTokenService.revokeRefreshToken(
+                request.refreshToken()
+        );
 
-        return buildAuthResponse(user, newAccessToken, request.refreshToken());
+        String accessToken =
+                jwtService.generateToken(user);
+
+        String newRefreshToken =
+                refreshTokenService.createRefreshToken(user);
+
+        return buildAuthResponse(
+                user,
+                accessToken,
+                newRefreshToken
+        );
     }
 
     public void logout(RefreshTokenRequest request) {

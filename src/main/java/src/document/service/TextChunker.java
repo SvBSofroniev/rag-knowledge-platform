@@ -36,7 +36,7 @@ public class TextChunker {
 
         if (overlap < 0 || overlap >= chunkSize) {
             throw new IllegalArgumentException(
-                    "Overlap must be smaller than chunk size"
+                    "Overlap must be non-negative and smaller than chunk size"
             );
         }
 

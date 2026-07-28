@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import src.common.exception.BadRequestException;
+import src.common.exception.ForbiddenOperationException;
+import src.common.exception.ResourceNotFoundException;
 import src.document.dto.DocumentResponse;
 import src.document.repository.DocumentRepository;
 import src.document.util.DocumentStatus;
@@ -14,12 +17,22 @@ import src.entity.WorkspaceMember;
 import src.workspace.service.WorkspacePermissionService;
 import src.workspace.util.WorkspaceRole;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class DocumentService {
+
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of(
+            "pdf",
+            "docx",
+            "txt",
+            "md",
+            "markdown"
+    );
 
     private final FileStorageService fileStorageService;
     private final WorkspacePermissionService permissionService;
@@ -32,19 +45,14 @@ public class DocumentService {
             User currentUser
     ) {
         WorkspaceMember member =
-                permissionService.requireMember(workspaceId, currentUser);
+                permissionService.requireMember(
+                        workspaceId,
+                        currentUser
+                );
 
         Workspace workspace = member.getWorkspace();
 
-        if (file == null || file.isEmpty()) {
-            throw new RuntimeException("File is empty");
-        }
-
-        String originalFilename = file.getOriginalFilename();
-
-        if (originalFilename == null || originalFilename.isBlank()) {
-            throw new RuntimeException("File name is missing");
-        }
+        String originalFilename = validateAndResolveFilename(file);
 
         FileStorageService.StoredFile storedFile =
                 fileStorageService.store(file);
@@ -61,7 +69,8 @@ public class DocumentService {
             document.setStatus(DocumentStatus.PENDING);
             document.setProcessingError(null);
 
-            Document saved = documentRepository.saveAndFlush(document);
+            Document saved =
+                    documentRepository.saveAndFlush(document);
 
             return toResponse(saved);
 
@@ -71,29 +80,34 @@ public class DocumentService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<DocumentResponse> getWorkspaceDocuments(
             UUID workspaceId,
             User currentUser
     ) {
-        WorkspaceMember member = permissionService.requireMember(workspaceId, currentUser);
-        Workspace workspace = member.getWorkspace();
+        WorkspaceMember member =
+                permissionService.requireMember(
+                        workspaceId,
+                        currentUser
+                );
 
-        return documentRepository.findByWorkspaceOrderByCreatedAtDesc(workspace)
+        return documentRepository
+                .findByWorkspaceOrderByCreatedAtDesc(
+                        member.getWorkspace()
+                )
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public DocumentResponse getDocument(
             UUID documentId,
             User currentUser
     ) {
         Document document = getDocumentOrThrow(documentId);
 
-        permissionService.requireMember(
-                document.getWorkspace().getId(),
-                currentUser
-        );
+        requireDocumentAccess(document, currentUser);
 
         return toResponse(document);
     }
@@ -105,27 +119,48 @@ public class DocumentService {
     ) {
         Document document = getDocumentOrThrow(documentId);
 
-        WorkspaceMember member = permissionService.requireMember(
-                document.getWorkspace().getId(),
-                currentUser
-        );
+        WorkspaceMember membership =
+                permissionService.requireMember(
+                        document.getWorkspace().getId(),
+                        currentUser
+                );
 
-        boolean isUploader = document.getUploadedBy().getId().equals(currentUser.getId());
+        boolean isUploader =
+                document.getUploadedBy()
+                        .getId()
+                        .equals(currentUser.getId());
+
         boolean isAdminOrOwner =
-                member.getRole() == WorkspaceRole.ADMIN ||
-                        member.getRole() == WorkspaceRole.OWNER;
+                membership.getRole() == WorkspaceRole.ADMIN ||
+                        membership.getRole() == WorkspaceRole.OWNER;
 
         if (!isUploader && !isAdminOrOwner) {
-            throw new RuntimeException("You do not have permission to delete this document");
+            throw new ForbiddenOperationException(
+                    "You do not have permission to delete this document"
+            );
         }
 
         fileStorageService.delete(document.getStoragePath());
         documentRepository.delete(document);
     }
 
-    private Document getDocumentOrThrow(UUID documentId) {
+    public void requireDocumentAccess(
+            Document document,
+            User currentUser
+    ) {
+        permissionService.requireMember(
+                document.getWorkspace().getId(),
+                currentUser
+        );
+    }
+
+    public Document getDocumentOrThrow(UUID documentId) {
         return documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("Document not found"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Document not found"
+                        )
+                );
     }
 
     public DocumentResponse toResponse(Document document) {
@@ -141,6 +176,54 @@ public class DocumentService {
                 document.getUploadedBy().getUsername(),
                 document.getCreatedAt()
         );
+    }
+
+    private String validateAndResolveFilename(
+            MultipartFile file
+    ) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException(
+                    "Uploaded file cannot be empty"
+            );
+        }
+
+        String suppliedFilename = file.getOriginalFilename();
+
+        if (suppliedFilename == null ||
+                suppliedFilename.isBlank()) {
+            throw new BadRequestException(
+                    "Uploaded file name is missing"
+            );
+        }
+
+        String safeFilename = Path.of(suppliedFilename)
+                .getFileName()
+                .toString();
+
+        String extension = getExtension(safeFilename);
+
+        if (!SUPPORTED_EXTENSIONS.contains(extension)) {
+            throw new BadRequestException(
+                    "Unsupported document extension: " + extension
+            );
+        }
+
+        return safeFilename;
+    }
+
+    private String getExtension(String filename) {
+        int dotIndex = filename.lastIndexOf('.');
+
+        if (dotIndex < 0 ||
+                dotIndex == filename.length() - 1) {
+            throw new BadRequestException(
+                    "Document must have a supported file extension"
+            );
+        }
+
+        return filename
+                .substring(dotIndex + 1)
+                .toLowerCase();
     }
 
     private String resolveFileType(MultipartFile file) {

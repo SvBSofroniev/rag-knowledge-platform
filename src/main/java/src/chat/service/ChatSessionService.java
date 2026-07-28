@@ -9,6 +9,8 @@ import src.chat.dto.CreateChatSessionRequest;
 import src.chat.dto.UpdateChatSessionRequest;
 import src.chat.repository.ChatMessageRepository;
 import src.chat.repository.ChatSessionRepository;
+import src.common.exception.BadRequestException;
+import src.common.exception.ResourceNotFoundException;
 import src.entity.ChatMessage;
 import src.entity.ChatSession;
 import src.entity.User;
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class ChatSessionService {
 
     private static final String DEFAULT_TITLE = "New chat";
+    private static final int MAX_TITLE_LENGTH = 255;
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -103,28 +106,79 @@ public class ChatSessionService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public ChatSession getAccessibleSession(
             UUID sessionId,
             User currentUser
     ) {
         ChatSession session = chatSessionRepository
-                .findByIdAndUser(sessionId, currentUser)
+                .findById(sessionId)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new ResourceNotFoundException(
                                 "Chat session not found"
                         )
                 );
 
         /*
-         * A user may own the session but could have later been
-         * removed from the workspace.
+         * First verify that the current user still belongs
+         * to the workspace.
          */
         workspacePermissionService.requireMember(
                 session.getWorkspace().getId(),
                 currentUser
         );
 
+        /*
+         * Chat sessions are personal. A workspace member must
+         * not access another member's session by guessing its UUID.
+         *
+         * Return 404 instead of 403 to avoid revealing that another
+         * user's chat session exists.
+         */
+        if (!session.getUser()
+                .getId()
+                .equals(currentUser.getId())) {
+            throw new ResourceNotFoundException(
+                    "Chat session not found"
+            );
+        }
+
         return session;
+    }
+
+    @Transactional
+    public ChatSessionResponse updateSession(
+            UUID sessionId,
+            UpdateChatSessionRequest request,
+            User currentUser
+    ) {
+        String normalizedTitle =
+                validateAndNormalizeUpdateTitle(request);
+
+        ChatSession session =
+                getAccessibleSession(sessionId, currentUser);
+
+        session.setTitle(normalizedTitle);
+
+        /*
+         * Explicit save is valid, although Hibernate dirty checking
+         * would also persist the changed managed entity.
+         */
+        ChatSession updatedSession =
+                chatSessionRepository.save(session);
+
+        return toSessionResponse(updatedSession);
+    }
+
+    @Transactional
+    public void deleteSession(
+            UUID sessionId,
+            User currentUser
+    ) {
+        ChatSession session =
+                getAccessibleSession(sessionId, currentUser);
+
+        chatSessionRepository.delete(session);
     }
 
     private String resolveTitle(
@@ -136,7 +190,45 @@ public class ChatSessionService {
             return DEFAULT_TITLE;
         }
 
-        return request.title().trim();
+        String normalizedTitle = request.title().trim();
+
+        validateTitleLength(normalizedTitle);
+
+        return normalizedTitle;
+    }
+
+    private String validateAndNormalizeUpdateTitle(
+            UpdateChatSessionRequest request
+    ) {
+        if (request == null) {
+            throw new BadRequestException(
+                    "Chat session update request cannot be empty"
+            );
+        }
+
+        String title = request.title();
+
+        if (title == null || title.isBlank()) {
+            throw new BadRequestException(
+                    "Chat session title cannot be empty"
+            );
+        }
+
+        String normalizedTitle = title.trim();
+
+        validateTitleLength(normalizedTitle);
+
+        return normalizedTitle;
+    }
+
+    private void validateTitleLength(String title) {
+        if (title.length() > MAX_TITLE_LENGTH) {
+            throw new BadRequestException(
+                    "Chat session title cannot exceed " +
+                            MAX_TITLE_LENGTH +
+                            " characters"
+            );
+        }
     }
 
     private ChatSessionResponse toSessionResponse(
@@ -161,37 +253,5 @@ public class ChatSessionService {
                 message.getContent(),
                 message.getCreatedAt()
         );
-    }
-
-    @Transactional
-    public ChatSessionResponse updateSession(
-            UUID sessionId,
-            UpdateChatSessionRequest request,
-            User currentUser
-    ) {
-        ChatSession session = getAccessibleSession(
-                sessionId,
-                currentUser
-        );
-
-        session.setTitle(request.title().trim());
-
-        ChatSession updatedSession =
-                chatSessionRepository.save(session);
-
-        return toSessionResponse(updatedSession);
-    }
-
-    @Transactional
-    public void deleteSession(
-            UUID sessionId,
-            User currentUser
-    ) {
-        ChatSession session = getAccessibleSession(
-                sessionId,
-                currentUser
-        );
-
-        chatSessionRepository.delete(session);
     }
 }

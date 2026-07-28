@@ -5,10 +5,12 @@ import jakarta.validation.constraints.Size;
 
 public record UpdateChatSessionRequest(
 
-        @NotBlank(message = "Chat title cannot be empty")
+        @NotBlank(
+                message = "Chat session title cannot be empty"
+        )
         @Size(
                 max = 255,
-                message = "Chat title cannot exceed 255 characters"
+                message = "Chat session title cannot exceed 255 characters"
         )
         String title
 ) {

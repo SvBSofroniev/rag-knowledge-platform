@@ -4,6 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.auth.repository.UserRepository;
+import src.common.exception.BadRequestException;
+import src.common.exception.ConflictException;
+import src.common.exception.ForbiddenOperationException;
+import src.common.exception.ResourceNotFoundException;
 import src.entity.User;
 import src.entity.Workspace;
 import src.entity.WorkspaceMember;
@@ -79,10 +83,17 @@ public class WorkspaceService {
         Workspace workspace = currentMember.getWorkspace();
 
         User userToAdd = userRepository.findById(request.userId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found")
+                );
 
-        if (memberRepository.existsByWorkspaceAndUser(workspace, userToAdd)) {
-            throw new RuntimeException("User is already a member");
+        if (memberRepository.existsByWorkspaceAndUser(
+                workspace,
+                userToAdd
+        )) {
+            throw new ConflictException(
+                    "User is already a workspace member"
+            );
         }
 
         WorkspaceMember newMember = new WorkspaceMember();
@@ -102,19 +113,38 @@ public class WorkspaceService {
     ) {
         permissionService.requireOwner(workspaceId, currentUser);
 
-        WorkspaceMember targetMember = memberRepository.findById(memberId)
-                .orElseThrow(() -> new RuntimeException("Member not found"));
+        WorkspaceMember targetMember =
+                memberRepository.findById(memberId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Workspace member not found"
+                                )
+                        );
 
-        if (!targetMember.getWorkspace().getId().equals(workspaceId)) {
-            throw new RuntimeException("Member does not belong to this workspace");
+        if (!targetMember.getWorkspace()
+                .getId()
+                .equals(workspaceId)) {
+            throw new ResourceNotFoundException(
+                    "Workspace member not found"
+            );
         }
 
         if (targetMember.getRole() == WorkspaceRole.OWNER) {
-            throw new RuntimeException("Cannot change owner role");
+            throw new ForbiddenOperationException(
+                    "The workspace owner's role cannot be changed"
+            );
         }
 
         if (request.role() == WorkspaceRole.OWNER) {
-            throw new RuntimeException("Cannot assign OWNER role here");
+            throw new BadRequestException(
+                    "The OWNER role cannot be assigned through this operation"
+            );
+        }
+
+        if (targetMember.getRole() == request.role()) {
+            throw new ConflictException(
+                    "The member already has this role"
+            );
         }
 
         targetMember.setRole(request.role());
@@ -125,15 +155,26 @@ public class WorkspaceService {
     public void removeMember(UUID workspaceId, String memberId, User currentUser) {
         permissionService.requireAdminOrOwner(workspaceId, currentUser);
 
-        WorkspaceMember targetMember = memberRepository.findById(memberId)
-                .orElseThrow(() -> new RuntimeException("Member not found"));
+        WorkspaceMember targetMember =
+                memberRepository.findById(memberId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Workspace member not found"
+                                )
+                        );
 
-        if (!targetMember.getWorkspace().getId().equals(workspaceId)) {
-            throw new RuntimeException("Member does not belong to this workspace");
+        if (!targetMember.getWorkspace()
+                .getId()
+                .equals(workspaceId)) {
+            throw new ResourceNotFoundException(
+                    "Workspace member not found"
+            );
         }
 
         if (targetMember.getRole() == WorkspaceRole.OWNER) {
-            throw new RuntimeException("Cannot remove workspace owner");
+            throw new ForbiddenOperationException(
+                    "The workspace owner cannot be removed"
+            );
         }
 
         memberRepository.delete(targetMember);

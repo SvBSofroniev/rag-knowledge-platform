@@ -6,7 +6,7 @@ public record CreateChatSessionRequest(
 
         @Size(
                 max = 255,
-                message = "Chat title cannot exceed 255 characters"
+                message = "Chat session title cannot exceed 255 characters"
         )
         String title
 ) {

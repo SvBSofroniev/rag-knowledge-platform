@@ -2,6 +2,9 @@ package src.document.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import src.common.exception.ConflictException;
+import src.common.exception.DocumentProcessingException;
+import src.common.exception.ResourceNotFoundException;
 import src.document.repository.DocumentRepository;
 import src.document.util.DocumentStatus;
 import src.entity.Document;
@@ -37,7 +40,7 @@ public class DocumentProcessingService {
             List<String> chunks = textChunker.chunk(extractedText);
 
             if (chunks.isEmpty()) {
-                throw new RuntimeException(
+                throw new DocumentProcessingException(
                         "Document produced no usable text chunks"
                 );
             }
@@ -65,19 +68,19 @@ public class DocumentProcessingService {
     private Document getDocument(UUID documentId) {
         return documentRepository.findById(documentId)
                 .orElseThrow(() ->
-                        new RuntimeException("Document not found")
+                        new ResourceNotFoundException("Document not found")
                 );
     }
 
     private void validateStatus(Document document) {
         if (document.getStatus() == DocumentStatus.PROCESSING) {
-            throw new RuntimeException(
+            throw new ConflictException(
                     "Document is already being processed"
             );
         }
 
         if (document.getStatus() == DocumentStatus.READY) {
-            throw new RuntimeException(
+            throw new ConflictException(
                     "Document has already been processed"
             );
         }

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import src.common.exception.ResourceNotFoundException;
 import src.document.repository.DocumentRepository;
 import src.document.util.DocumentStatus;
 import src.entity.Document;
@@ -46,7 +47,9 @@ public class DocumentStatusService {
     private Document getDocument(UUID documentId) {
         return documentRepository.findById(documentId)
                 .orElseThrow(() ->
-                        new RuntimeException("Document not found")
+                        new ResourceNotFoundException(
+                                "Document not found"
+                        )
                 );
     }
 

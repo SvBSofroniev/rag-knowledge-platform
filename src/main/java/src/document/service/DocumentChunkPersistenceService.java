@@ -3,6 +3,8 @@ package src.document.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import src.common.exception.DocumentProcessingException;
+import src.common.exception.ResourceNotFoundException;
 import src.document.repository.DocumentChunkRepository;
 import src.document.repository.DocumentRepository;
 import src.embedding.service.EmbeddingService;
@@ -29,7 +31,9 @@ public class DocumentChunkPersistenceService {
     ) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() ->
-                        new RuntimeException("Document not found")
+                        new ResourceNotFoundException(
+                                "Document not found"
+                        )
                 );
 
         chunkRepository.deleteByDocument(document);
@@ -58,8 +62,8 @@ public class DocumentChunkPersistenceService {
         }
 
         if (chunks.isEmpty()) {
-            throw new RuntimeException(
-                    "No valid document chunks to store"
+            throw new DocumentProcessingException(
+                    "No valid document chunks were generated"
             );
         }
 

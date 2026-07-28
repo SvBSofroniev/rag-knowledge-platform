@@ -2,6 +2,8 @@ package src.workspace.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import src.common.exception.ForbiddenOperationException;
+import src.common.exception.ResourceNotFoundException;
 import src.entity.User;
 import src.entity.Workspace;
 import src.entity.WorkspaceMember;
@@ -20,42 +22,77 @@ public class WorkspacePermissionService {
 
     public Workspace getWorkspaceOrThrow(UUID workspaceId) {
         return workspaceRepository.findById(workspaceId)
-                .orElseThrow(() -> new RuntimeException("Workspace not found"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Workspace not found"
+                        )
+                );
     }
 
-    public WorkspaceMember getMemberOrThrow(Workspace workspace, User user) {
-        return memberRepository.findByWorkspaceAndUser(workspace, user)
-                .orElseThrow(() -> new RuntimeException("You are not a member of this workspace"));
+    public WorkspaceMember getMemberOrThrow(
+            Workspace workspace,
+            User user
+    ) {
+        return memberRepository
+                .findByWorkspaceAndUser(workspace, user)
+                .orElseThrow(() ->
+                        new ForbiddenOperationException(
+                                "You are not a member of this workspace"
+                        )
+                );
     }
 
-    public WorkspaceMember requireMember(UUID workspaceId, User user) {
-        Workspace workspace = getWorkspaceOrThrow(workspaceId);
+    public WorkspaceMember requireMember(
+            UUID workspaceId,
+            User user
+    ) {
+        Workspace workspace =
+                getWorkspaceOrThrow(workspaceId);
+
         return getMemberOrThrow(workspace, user);
     }
 
-    public WorkspaceMember requireAdminOrOwner(UUID workspaceId, User user) {
-        WorkspaceMember member = requireMember(workspaceId, user);
+    public WorkspaceMember requireAdminOrOwner(
+            UUID workspaceId,
+            User user
+    ) {
+        WorkspaceMember member =
+                requireMember(workspaceId, user);
 
         if (member.getRole() != WorkspaceRole.ADMIN &&
                 member.getRole() != WorkspaceRole.OWNER) {
-            throw new RuntimeException("You do not have permission");
+            throw new ForbiddenOperationException(
+                    "Only workspace administrators or the owner can perform this action"
+            );
         }
 
         return member;
     }
 
-    public WorkspaceMember requireOwner(UUID workspaceId, User user) {
-        WorkspaceMember member = requireMember(workspaceId, user);
+    public WorkspaceMember requireOwner(
+            UUID workspaceId,
+            User user
+    ) {
+        WorkspaceMember member =
+                requireMember(workspaceId, user);
 
         if (member.getRole() != WorkspaceRole.OWNER) {
-            throw new RuntimeException("Only owner can perform this action");
+            throw new ForbiddenOperationException(
+                    "Only the workspace owner can perform this action"
+            );
         }
 
         return member;
     }
 
-    public boolean isMember(UUID workspaceId, User user) {
-        Workspace workspace = getWorkspaceOrThrow(workspaceId);
-        return memberRepository.existsByWorkspaceAndUser(workspace, user);
+    public boolean isMember(
+            UUID workspaceId,
+            User user
+    ) {
+        Workspace workspace =
+                getWorkspaceOrThrow(workspaceId);
+
+        return memberRepository
+                .existsByWorkspaceAndUser(workspace, user);
     }
 }

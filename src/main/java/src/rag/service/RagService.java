@@ -2,6 +2,10 @@ package src.rag.service;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+import src.common.exception.AiModelResponseException;
+import src.common.exception.AiServiceUnavailableException;
+import src.common.exception.ApiException;
+import src.common.exception.BadRequestException;
 import src.entity.User;
 import src.rag.dto.ConversationMessage;
 import src.rag.dto.RagAnswerResponse;
@@ -151,9 +155,10 @@ public class RagService {
             String conversationHistory,
             String documentContext
     ) {
-        String answer = chatClient
-                .prompt()
-                .system("""
+        try {
+            String answer = chatClient
+                    .prompt()
+                    .system("""
                         You are the OurVault knowledge-base assistant.
 
                         Answer using only the supplied document context.
@@ -171,8 +176,8 @@ public class RagService {
                         - Keep the answer clear and concise.
                         - Cite supporting context with markers such as [Source 1].
                         """)
-                .user(user -> user
-                        .text("""
+                    .user(user -> user
+                            .text("""
                                 Recent conversation history:
 
                                 {history}
@@ -185,20 +190,30 @@ public class RagService {
 
                                 {question}
                                 """)
-                        .param("history", conversationHistory)
-                        .param("context", documentContext)
-                        .param("question", question)
-                )
-                .call()
-                .content();
+                            .param("history", conversationHistory)
+                            .param("context", documentContext)
+                            .param("question", question)
+                    )
+                    .call()
+                    .content();
 
-        if (answer == null || answer.isBlank()) {
-            throw new RuntimeException(
-                    "The chat model returned an empty response"
+            if (answer == null || answer.isBlank()) {
+                throw new AiModelResponseException(
+                        "The chat model returned an empty response"
+                );
+            }
+
+            return answer.trim();
+
+        } catch (ApiException exception) {
+            throw exception;
+
+        } catch (Exception exception) {
+            throw new AiServiceUnavailableException(
+                    "The local Ollama chat service is unavailable",
+                    exception
             );
         }
-
-        return answer.trim();
     }
 
     private String buildRetrievalQuery(
@@ -323,13 +338,13 @@ public class RagService {
 
     private void validateQuestion(String question) {
         if (question == null || question.isBlank()) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Question cannot be empty"
             );
         }
 
         if (question.length() > MAX_QUESTION_LENGTH) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Question cannot exceed " +
                             MAX_QUESTION_LENGTH +
                             " characters"

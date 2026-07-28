@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.chat.dto.AttachedDocumentResponse;
 import src.chat.repository.DocumentChatContextRepository;
+import src.common.exception.ConflictException;
+import src.common.exception.ResourceNotFoundException;
 import src.document.repository.DocumentRepository;
 import src.document.util.DocumentStatus;
 import src.entity.ChatSession;
@@ -29,35 +31,45 @@ public class ChatDocumentContextService {
             UUID documentId,
             User currentUser
     ) {
-        ChatSession session = chatSessionService.getAccessibleSession(
-                sessionId,
-                currentUser
+        ChatSession session =
+                chatSessionService.getAccessibleSession(
+                        sessionId,
+                        currentUser
+                );
+
+        Document document = getDocumentOrThrow(documentId);
+
+        requireDocumentInSessionWorkspace(
+                session,
+                document
         );
 
-        Document document = getDocument(documentId);
-
-        validateSameWorkspace(session, document);
-
         if (document.getStatus() != DocumentStatus.READY) {
-            throw new RuntimeException(
+            throw new ConflictException(
                     "Only READY documents can be attached to a chat session"
             );
         }
 
-        if (contextRepository.existsByChatSessionAndDocument(
-                session,
-                document
-        )) {
-            throw new RuntimeException(
+        boolean alreadyAttached =
+                contextRepository.existsByChatSessionAndDocument(
+                        session,
+                        document
+                );
+
+        if (alreadyAttached) {
+            throw new ConflictException(
                     "Document is already attached to this chat session"
             );
         }
 
-        DocumentChatContext context = new DocumentChatContext();
+        DocumentChatContext context =
+                new DocumentChatContext();
+
         context.setChatSession(session);
         context.setDocument(document);
 
-        DocumentChatContext saved = contextRepository.save(context);
+        DocumentChatContext saved =
+                contextRepository.save(context);
 
         return toResponse(saved);
     }
@@ -67,10 +79,11 @@ public class ChatDocumentContextService {
             UUID sessionId,
             User currentUser
     ) {
-        ChatSession session = chatSessionService.getAccessibleSession(
-                sessionId,
-                currentUser
-        );
+        ChatSession session =
+                chatSessionService.getAccessibleSession(
+                        sessionId,
+                        currentUser
+                );
 
         return contextRepository
                 .findByChatSessionOrderByAttachedAtAsc(session)
@@ -85,22 +98,30 @@ public class ChatDocumentContextService {
             UUID documentId,
             User currentUser
     ) {
-        ChatSession session = chatSessionService.getAccessibleSession(
-                sessionId,
-                currentUser
+        ChatSession session =
+                chatSessionService.getAccessibleSession(
+                        sessionId,
+                        currentUser
+                );
+
+        Document document = getDocumentOrThrow(documentId);
+
+        requireDocumentInSessionWorkspace(
+                session,
+                document
         );
 
-        Document document = getDocument(documentId);
-
-        validateSameWorkspace(session, document);
-
-        DocumentChatContext context = contextRepository
-                .findByChatSessionAndDocument(session, document)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Document is not attached to this chat session"
+        DocumentChatContext context =
+                contextRepository
+                        .findByChatSessionAndDocument(
+                                session,
+                                document
                         )
-                );
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Document is not attached to this chat session"
+                                )
+                        );
 
         contextRepository.delete(context);
     }
@@ -112,18 +133,25 @@ public class ChatDocumentContextService {
         return contextRepository
                 .findByChatSessionOrderByAttachedAtAsc(session)
                 .stream()
-                .map(context -> context.getDocument().getId())
+                .map(context ->
+                        context.getDocument().getId()
+                )
                 .toList();
     }
 
-    private Document getDocument(UUID documentId) {
-        return documentRepository.findById(documentId)
+    private Document getDocumentOrThrow(
+            UUID documentId
+    ) {
+        return documentRepository
+                .findById(documentId)
                 .orElseThrow(() ->
-                        new RuntimeException("Document not found")
+                        new ResourceNotFoundException(
+                                "Document not found"
+                        )
                 );
     }
 
-    private void validateSameWorkspace(
+    private void requireDocumentInSessionWorkspace(
             ChatSession session,
             Document document
     ) {
@@ -134,8 +162,12 @@ public class ChatDocumentContextService {
                 document.getWorkspace().getId();
 
         if (!sessionWorkspaceId.equals(documentWorkspaceId)) {
-            throw new RuntimeException(
-                    "Document does not belong to the chat session workspace"
+            /*
+             * Return 404 rather than 403 to avoid revealing that a
+             * document exists in another workspace.
+             */
+            throw new ResourceNotFoundException(
+                    "Document not found in the chat session workspace"
             );
         }
     }
