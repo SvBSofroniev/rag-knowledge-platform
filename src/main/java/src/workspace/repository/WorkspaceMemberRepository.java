@@ -8,9 +8,10 @@ import src.entity.WorkspaceMember;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, String> {
+public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, UUID> {
 
     boolean existsByWorkspaceAndUser(Workspace workspace, User user);
 

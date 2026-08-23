@@ -107,7 +107,7 @@ public class WorkspaceService {
     @Transactional
     public void updateMemberRole(
             UUID workspaceId,
-            String memberId,
+            UUID memberId,
             UpdateWorkspaceRoleRequest request,
             User currentUser
     ) {
@@ -152,7 +152,7 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public void removeMember(UUID workspaceId, String memberId, User currentUser) {
+    public void removeMember(UUID workspaceId, UUID memberId, User currentUser) {
         permissionService.requireAdminOrOwner(workspaceId, currentUser);
 
         WorkspaceMember targetMember =

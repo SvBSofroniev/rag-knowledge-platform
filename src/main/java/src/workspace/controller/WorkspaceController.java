@@ -60,7 +60,7 @@ public class WorkspaceController {
     @PatchMapping("/{workspaceId}/members/{memberId}")
     public void updateMemberRole(
             @PathVariable UUID workspaceId,
-            @PathVariable String memberId,
+            @PathVariable UUID memberId,
             @RequestBody UpdateWorkspaceRoleRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
@@ -70,7 +70,7 @@ public class WorkspaceController {
     @DeleteMapping("/{workspaceId}/members/{memberId}")
     public void removeMember(
             @PathVariable UUID workspaceId,
-            @PathVariable String memberId,
+            @PathVariable UUID memberId,
             @AuthenticationPrincipal User currentUser
     ) {
         workspaceService.removeMember(workspaceId, memberId, currentUser);
