@@ -1,5 +1,6 @@
 package src.workspace.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -74,5 +75,29 @@ public class WorkspaceController {
             @AuthenticationPrincipal User currentUser
     ) {
         workspaceService.removeMember(workspaceId, memberId, currentUser);
+    }
+
+    @PatchMapping("/{workspaceId}")
+    public WorkspaceResponse updateWorkspace(
+            @PathVariable UUID workspaceId,
+            @Valid @RequestBody UpdateWorkspaceRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        return workspaceService.updateWorkspace(
+                workspaceId,
+                request,
+                currentUser
+        );
+    }
+
+    @DeleteMapping("/{workspaceId}")
+    public void deleteWorkspace(
+            @PathVariable UUID workspaceId,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        workspaceService.deleteWorkspace(
+                workspaceId,
+                currentUser
+        );
     }
 }

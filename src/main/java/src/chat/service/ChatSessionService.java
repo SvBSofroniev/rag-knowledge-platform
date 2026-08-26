@@ -16,6 +16,8 @@ import src.entity.ChatSession;
 import src.entity.User;
 import src.entity.Workspace;
 import src.entity.WorkspaceMember;
+import src.rag.dto.SemanticSearchResponse;
+import src.util.SenderType;
 import src.workspace.service.WorkspacePermissionService;
 
 import java.util.List;
@@ -31,6 +33,7 @@ public class ChatSessionService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final WorkspacePermissionService workspacePermissionService;
+    private final ChatMessageSourceService chatMessageSourceService;
 
     @Transactional
     public ChatSessionResponse createSession(
@@ -102,7 +105,19 @@ public class ChatSessionService {
         return chatMessageRepository
                 .findBySessionOrderByCreatedAtAsc(session)
                 .stream()
-                .map(this::toMessageResponse)
+                .map(message -> {
+                    List<SemanticSearchResponse> sources =
+                            message.getSenderType() == SenderType.ASSISTANT
+                                    ? chatMessageSourceService.getSources(
+                                    message.getId()
+                            )
+                                    : List.of();
+
+                    return toMessageResponse(
+                            message,
+                            sources
+                    );
+                })
                 .toList();
     }
 
@@ -245,13 +260,15 @@ public class ChatSessionService {
     }
 
     private ChatMessageResponse toMessageResponse(
-            ChatMessage message
+            ChatMessage message,
+            List<SemanticSearchResponse> sources
     ) {
         return new ChatMessageResponse(
                 message.getId(),
                 message.getSenderType(),
                 message.getContent(),
-                message.getCreatedAt()
+                message.getCreatedAt(),
+                sources
         );
     }
 }

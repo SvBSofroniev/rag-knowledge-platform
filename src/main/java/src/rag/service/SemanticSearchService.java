@@ -26,6 +26,7 @@ public class SemanticSearchService {
     private static final int DEFAULT_LIMIT = 5;
     private static final int MAX_LIMIT = 20;
     private static final int MAX_QUERY_LENGTH = 5_000;
+    private static final int MAX_CONTEXT_LIMIT = 100;
 
     private final EmbeddingService embeddingService;
     private final DocumentChunkRepository chunkRepository;
@@ -33,6 +34,9 @@ public class SemanticSearchService {
 
     @Value("${rag.search.minimum-similarity:0.35}")
     private double minimumSimilarity;
+
+    @Value("${rag.search.fallback-minimum-similarity:0.20}")
+    private double fallbackMinimumSimilarity;
 
     public List<SemanticSearchResponse> search(
             UUID workspaceId,
@@ -46,10 +50,6 @@ public class SemanticSearchService {
         int normalizedLimit =
                 validateAndNormalizeLimit(limit);
 
-        /*
-         * Prevent retrieval from workspaces to which the
-         * authenticated user does not belong.
-         */
         permissionService.requireMember(
                 workspaceId,
                 currentUser
@@ -75,7 +75,8 @@ public class SemanticSearchService {
         return mapLogAndFilterResults(
                 workspaceId,
                 normalizedQuery,
-                databaseResults
+                databaseResults,
+                false
         );
     }
 
@@ -86,16 +87,128 @@ public class SemanticSearchService {
             Integer limit,
             User currentUser
     ) {
+        return searchInDocumentsInternal(
+                workspaceId,
+                documentIds,
+                query,
+                limit,
+                currentUser,
+                false
+        );
+    }
+
+    public List<SemanticSearchResponse> searchInDocumentsWithFallback(
+            UUID workspaceId,
+            List<UUID> documentIds,
+            String query,
+            Integer limit,
+            User currentUser
+    ) {
+        return searchInDocumentsInternal(
+                workspaceId,
+                documentIds,
+                query,
+                limit,
+                currentUser,
+                true
+        );
+    }
+
+    public List<SemanticSearchResponse> getDocumentContext(
+            UUID workspaceId,
+            List<UUID> documentIds,
+            Integer limit,
+            User currentUser
+    ) {
+        permissionService.requireMember(
+                workspaceId,
+                currentUser
+        );
+
+        List<UUID> uniqueDocumentIds =
+                validateAndNormalizeDocumentIds(
+                        documentIds
+                );
+
+        int normalizedLimit =
+                validateContextLimit(
+                        limit
+                );
+
+        List<DocumentChunkSearchResult> results =
+                chunkRepository.findDocumentContextChunks(
+                        workspaceId,
+                        uniqueDocumentIds,
+                        normalizedLimit
+                );
+
+        if (results == null ||
+                results.isEmpty()) {
+            return List.of();
+        }
+
+        return results.stream()
+                .map(this::toContextResponse)
+                .toList();
+    }
+
+    private int validateContextLimit(
+            Integer limit
+    ) {
+        if (limit == null) {
+            return DEFAULT_LIMIT;
+        }
+
+        if (limit < 1) {
+            throw new BadRequestException(
+                    "Context result limit must be at least 1"
+            );
+        }
+
+        if (limit > MAX_CONTEXT_LIMIT) {
+            throw new BadRequestException(
+                    "Context result limit cannot exceed " +
+                            MAX_CONTEXT_LIMIT
+            );
+        }
+
+        return limit;
+    }
+
+    private SemanticSearchResponse toContextResponse(
+            DocumentChunkSearchResult result
+    ) {
+        if (result == null) {
+            throw new AiModelResponseException(
+                    "Document context returned an invalid result"
+            );
+        }
+
+        return new SemanticSearchResponse(
+                result.getChunkId(),
+                result.getDocumentId(),
+                result.getDocumentTitle(),
+                result.getChunkIndex(),
+                result.getContent(),
+                null,
+                null
+        );
+    }
+
+    private List<SemanticSearchResponse> searchInDocumentsInternal(
+            UUID workspaceId,
+            List<UUID> documentIds,
+            String query,
+            Integer limit,
+            User currentUser,
+            boolean allowFallback
+    ) {
         String normalizedQuery =
                 validateAndNormalizeQuery(query);
 
         int normalizedLimit =
                 validateAndNormalizeLimit(limit);
 
-        /*
-         * The repository query is scoped by workspaceId, but we
-         * must also verify that the current user is a member.
-         */
         permissionService.requireMember(
                 workspaceId,
                 currentUser
@@ -127,7 +240,8 @@ public class SemanticSearchService {
         return mapLogAndFilterResults(
                 workspaceId,
                 normalizedQuery,
-                databaseResults
+                databaseResults,
+                allowFallback
         );
     }
 
@@ -185,11 +299,11 @@ public class SemanticSearchService {
             );
         }
 
-        List<UUID> uniqueDocumentIds = documentIds
-                .stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+        List<UUID> uniqueDocumentIds =
+                documentIds.stream()
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList();
 
         if (uniqueDocumentIds.isEmpty()) {
             throw new BadRequestException(
@@ -230,10 +344,12 @@ public class SemanticSearchService {
     private List<SemanticSearchResponse> mapLogAndFilterResults(
             UUID workspaceId,
             String query,
-            List<DocumentChunkSearchResult> databaseResults
+            List<DocumentChunkSearchResult> databaseResults,
+            boolean allowFallback
     ) {
         if (databaseResults == null ||
                 databaseResults.isEmpty()) {
+
             logSearchResults(
                     workspaceId,
                     query,
@@ -249,8 +365,8 @@ public class SemanticSearchService {
                         .toList();
 
         /*
-         * Log before filtering so rejected results can still be
-         * inspected while calibrating the similarity threshold.
+         * Log all results before filtering so we can inspect
+         * rejected similarities while tuning retrieval.
          */
         logSearchResults(
                 workspaceId,
@@ -258,9 +374,58 @@ public class SemanticSearchService {
                 mappedResults
         );
 
-        return mappedResults.stream()
-                .filter(this::meetsSimilarityThreshold)
-                .toList();
+        List<SemanticSearchResponse> strictResults =
+                mappedResults.stream()
+                        .filter(this::meetsSimilarityThreshold)
+                        .toList();
+
+        /*
+         * If normal semantic retrieval found relevant chunks,
+         * use those and do not fall back.
+         */
+        if (!strictResults.isEmpty()) {
+            return strictResults;
+        }
+
+        /*
+         * Normal workspace-wide search remains strict.
+         *
+         * Fallback is only allowed for explicitly selected
+         * documents.
+         */
+        if (!allowFallback) {
+            return List.of();
+        }
+
+        /*
+         * If the user explicitly selected documents but none
+         * passed the normal threshold, allow a softer threshold.
+         *
+         * This helps broad questions such as:
+         *
+         * "What animals are mentioned?"
+         * "What topics are covered?"
+         * "What information is in this document?"
+         */
+        List<SemanticSearchResponse> fallbackResults =
+                mappedResults.stream()
+                        .filter(
+                                this::meetsFallbackSimilarityThreshold
+                        )
+                        .toList();
+
+        log.debug(
+                "Attached-document semantic fallback: " +
+                        "workspace={}, strictThreshold={}, " +
+                        "fallbackThreshold={}, candidates={}, accepted={}",
+                workspaceId,
+                minimumSimilarity,
+                fallbackMinimumSimilarity,
+                mappedResults.size(),
+                fallbackResults.size()
+        );
+
+        return fallbackResults;
     }
 
     private SemanticSearchResponse toResponse(
@@ -282,14 +447,12 @@ public class SemanticSearchService {
         }
 
         /*
-         * For cosine distance:
+         * pgvector cosine distance:
          *
          * similarity = 1 - distance
-         *
-         * Cosine similarity can range from -1 to 1, so it should
-         * not be forcibly clamped to the 0–1 range.
          */
-        double similarity = 1.0 - distance;
+        double similarity =
+                1.0 - distance;
 
         return new SemanticSearchResponse(
                 result.getChunkId(),
@@ -306,28 +469,47 @@ public class SemanticSearchService {
             SemanticSearchResponse result
     ) {
         return result.similarity() != null &&
-                Double.isFinite(result.similarity()) &&
-                result.similarity() >= minimumSimilarity;
+                Double.isFinite(
+                        result.similarity()
+                ) &&
+                result.similarity() >=
+                        minimumSimilarity;
+    }
+
+    private boolean meetsFallbackSimilarityThreshold(
+            SemanticSearchResponse result
+    ) {
+        return result.similarity() != null &&
+                Double.isFinite(
+                        result.similarity()
+                ) &&
+                result.similarity() >=
+                        fallbackMinimumSimilarity;
     }
 
     private String toVectorLiteral(
             float[] embedding
     ) {
         StringBuilder vector =
-                new StringBuilder(embedding.length * 12);
+                new StringBuilder(
+                        embedding.length * 12
+                );
 
         vector.append('[');
 
-        for (int index = 0;
-             index < embedding.length;
-             index++) {
-
+        for (
+                int index = 0;
+                index < embedding.length;
+                index++
+        ) {
             if (index > 0) {
                 vector.append(',');
             }
 
             vector.append(
-                    Float.toString(embedding[index])
+                    Float.toString(
+                            embedding[index]
+                    )
             );
         }
 
@@ -341,26 +523,40 @@ public class SemanticSearchService {
             String query,
             List<SemanticSearchResponse> results
     ) {
-        /*
-         * Debug level avoids filling production logs with user
-         * questions and document retrieval details.
-         */
         log.debug(
-                "Semantic search completed: workspace={}, queryLength={}, threshold={}, results={}",
+                "Semantic search completed: " +
+                        "workspace={}, queryLength={}, " +
+                        "threshold={}, fallbackThreshold={}, results={}",
                 workspaceId,
                 query.length(),
                 minimumSimilarity,
+                fallbackMinimumSimilarity,
                 results.size()
         );
 
         for (SemanticSearchResponse result : results) {
+
+            boolean strictAccepted =
+                    meetsSimilarityThreshold(
+                            result
+                    );
+
+            boolean fallbackAccepted =
+                    meetsFallbackSimilarityThreshold(
+                            result
+                    );
+
             log.debug(
-                    "Semantic result: document={}, chunk={}, similarity={}, distance={}, accepted={}",
+                    "Semantic result: " +
+                            "document={}, chunk={}, similarity={}, " +
+                            "distance={}, strictAccepted={}, " +
+                            "fallbackAccepted={}",
                     result.documentTitle(),
                     result.chunkIndex(),
                     result.similarity(),
                     result.distance(),
-                    meetsSimilarityThreshold(result)
+                    strictAccepted,
+                    fallbackAccepted
             );
         }
     }

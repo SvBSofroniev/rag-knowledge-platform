@@ -14,13 +14,23 @@ import java.util.UUID;
 public interface ChatSessionRepository
         extends JpaRepository<ChatSession, UUID> {
 
-    List<ChatSession> findByWorkspaceAndUserOrderByUpdatedAtDesc(
+    List<ChatSession>
+    findByWorkspaceAndUserOrderByUpdatedAtDesc(
             Workspace workspace,
             User user
     );
 
     Optional<ChatSession> findByIdAndUser(
             UUID sessionId,
+            User user
+    );
+
+    long countByUser(
+            User user
+    );
+
+    List<ChatSession>
+    findTop5ByUserOrderByUpdatedAtDesc(
             User user
     );
 }

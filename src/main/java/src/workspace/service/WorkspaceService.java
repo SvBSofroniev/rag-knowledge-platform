@@ -199,4 +199,68 @@ public class WorkspaceService {
                 ))
                 .toList();
     }
+
+    @Transactional
+    public WorkspaceResponse updateWorkspace(
+            UUID workspaceId,
+            UpdateWorkspaceRequest request,
+            User currentUser
+    ) {
+        WorkspaceMember currentMember =
+                permissionService.requireAdminOrOwner(
+                        workspaceId,
+                        currentUser
+                );
+
+        Workspace workspace =
+                currentMember.getWorkspace();
+
+        String name = request.name().trim();
+
+        if (name.isEmpty()) {
+            throw new BadRequestException(
+                    "Workspace name cannot be empty"
+            );
+        }
+
+        String description =
+                request.description() == null
+                        ? null
+                        : request.description().trim();
+
+        if (description != null &&
+                description.isEmpty()) {
+            description = null;
+        }
+
+        workspace.setName(name);
+        workspace.setDescription(description);
+
+        Workspace saved =
+                workspaceRepository.save(workspace);
+
+        return new WorkspaceResponse(
+                saved.getId(),
+                saved.getName(),
+                saved.getDescription(),
+                currentMember.getRole()
+        );
+    }
+    @Transactional
+    public void deleteWorkspace(
+            UUID workspaceId,
+            User currentUser
+    ) {
+        WorkspaceMember owner =
+                permissionService.requireOwner(
+                        workspaceId,
+                        currentUser
+                );
+
+        Workspace workspace =
+                owner.getWorkspace();
+
+        workspaceRepository.delete(workspace);
+    }
+
 }

@@ -4,12 +4,34 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import src.entity.Document;
 import src.entity.Workspace;
+import src.document.util.DocumentStatus;
 
 import java.util.List;
 import java.util.UUID;
 
 @Repository
-public interface DocumentRepository extends JpaRepository<Document, UUID> {
+public interface DocumentRepository
+        extends JpaRepository<Document, UUID> {
 
-    List<Document> findByWorkspaceOrderByCreatedAtDesc(Workspace workspace);
+    List<Document> findByWorkspaceOrderByCreatedAtDesc(
+            Workspace workspace
+    );
+
+    long countByWorkspace(
+            Workspace workspace
+    );
+
+    long countByWorkspaceIn(
+            List<Workspace> workspaces
+    );
+
+    long countByWorkspaceInAndStatus(
+            List<Workspace> workspaces,
+            DocumentStatus status
+    );
+
+    List<Document>
+    findTop5ByWorkspaceInOrderByCreatedAtDesc(
+            List<Workspace> workspaces
+    );
 }

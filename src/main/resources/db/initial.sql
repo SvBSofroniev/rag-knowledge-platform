@@ -310,3 +310,39 @@ CREATE INDEX idx_refresh_tokens_user
 
 CREATE INDEX idx_refresh_tokens_active
     ON refresh_tokens(user_id, revoked, expires_at);
+
+    -- =========================================================
+    -- CHAT MESSAGE SOURCES
+    -- =========================================================
+
+    CREATE TABLE chat_message_sources (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        message_id UUID NOT NULL,
+
+        source_rank INTEGER NOT NULL,
+
+        chunk_id UUID NOT NULL,
+        document_id UUID NOT NULL,
+
+        document_title VARCHAR(255) NOT NULL,
+        chunk_index INTEGER NOT NULL,
+
+        content TEXT NOT NULL,
+
+        distance DOUBLE PRECISION,
+        similarity DOUBLE PRECISION,
+
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+        CONSTRAINT fk_chat_message_sources_message
+            FOREIGN KEY (message_id)
+            REFERENCES chat_messages(id)
+            ON DELETE CASCADE,
+
+        CONSTRAINT uk_chat_message_source_rank
+            UNIQUE (message_id, source_rank)
+    );
+
+    CREATE INDEX idx_chat_message_sources_message
+        ON chat_message_sources(message_id);

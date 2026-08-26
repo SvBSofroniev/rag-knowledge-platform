@@ -17,6 +17,7 @@ import src.entity.ChatSession;
 import src.entity.User;
 import src.rag.dto.ConversationMessage;
 import src.rag.dto.RagAnswerResponse;
+import src.rag.dto.SemanticSearchResponse;
 import src.rag.service.RagService;
 import src.util.SenderType;
 
@@ -38,6 +39,7 @@ public class ChatMessageService {
     private final AiQueryRepository aiQueryRepository;
     private final RagService ragService;
     private final ChatDocumentContextService chatDocumentContextService;
+    private final ChatMessageSourceService chatMessageSourceService;
 
     @Value("${spring.ai.ollama.chat.model:gemma3:4b}")
     private String chatModelName;
@@ -76,6 +78,29 @@ public class ChatMessageService {
                 chatDocumentContextService
                         .getAttachedDocumentIds(session);
 
+        if (attachedDocumentIds.isEmpty()) {
+            ChatMessage assistantMessage = saveMessage(
+                    session,
+                    SenderType.ASSISTANT,
+                    "No documents are attached to this chat. Attach at least one document before asking document-related questions."
+            );
+
+            updateSessionTimestamp(session);
+
+            return new ChatAnswerResponse(
+                    session.getId(),
+                    toMessageResponse(
+                            userMessage,
+                            List.of()
+                    ),
+                    toMessageResponse(
+                            assistantMessage,
+                            List.of()
+                    ),
+                    List.of()
+            );
+        }
+
         long startedAt = System.nanoTime();
 
         RagAnswerResponse ragAnswer = ragService.answer(
@@ -95,6 +120,11 @@ public class ChatMessageService {
                 ragAnswer.answer()
         );
 
+        chatMessageSourceService.saveSources(
+                assistantMessage,
+                ragAnswer.sources()
+        );
+
         updateSessionTimestamp(session);
 
         saveAiQuery(
@@ -107,8 +137,14 @@ public class ChatMessageService {
 
         return new ChatAnswerResponse(
                 session.getId(),
-                toMessageResponse(userMessage),
-                toMessageResponse(assistantMessage),
+                toMessageResponse(
+                        userMessage,
+                        List.of()
+                ),
+                toMessageResponse(
+                        assistantMessage,
+                        ragAnswer.sources()
+                ),
                 ragAnswer.sources()
         );
     }
@@ -196,13 +232,15 @@ public class ChatMessageService {
     }
 
     private ChatMessageResponse toMessageResponse(
-            ChatMessage message
+            ChatMessage message,
+            List<SemanticSearchResponse> sources
     ) {
         return new ChatMessageResponse(
                 message.getId(),
                 message.getSenderType(),
                 message.getContent(),
-                message.getCreatedAt()
+                message.getCreatedAt(),
+                sources
         );
     }
 

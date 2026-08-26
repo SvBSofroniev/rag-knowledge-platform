@@ -92,4 +92,38 @@ public interface DocumentChunkRepository
             @Param("queryEmbedding") String queryEmbedding,
             @Param("resultLimit") int resultLimit
     );
+
+    /**
+     * Loads document chunks in their original document order.
+     *
+     * Used for broad questions where complete document coverage
+     * is more important than semantic similarity.
+     */
+    @Query(
+            value = """
+                SELECT
+                    dc.id AS chunkId,
+                    dc.document_id AS documentId,
+                    d.title AS documentTitle,
+                    dc.chunk_index AS chunkIndex,
+                    dc.content AS content,
+                    CAST(NULL AS double precision) AS distance
+                FROM document_chunks dc
+                JOIN documents d
+                    ON d.id = dc.document_id
+                WHERE d.workspace_id = :workspaceId
+                  AND d.upload_status = 'READY'
+                  AND dc.document_id IN (:documentIds)
+                ORDER BY
+                    dc.document_id,
+                    dc.chunk_index
+                LIMIT :resultLimit
+                """,
+            nativeQuery = true
+    )
+    List<DocumentChunkSearchResult> findDocumentContextChunks(
+            @Param("workspaceId") UUID workspaceId,
+            @Param("documentIds") List<UUID> documentIds,
+            @Param("resultLimit") int resultLimit
+    );
 }
