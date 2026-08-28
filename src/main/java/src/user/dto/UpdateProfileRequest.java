@@ -1,4 +1,4 @@
-package src.auth.dto;
+package src.user.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
-public record RegisterRequest(
+public record UpdateProfileRequest(
 
         @NotBlank(message = "Username is required")
         @Size(
@@ -40,14 +40,6 @@ public record RegisterRequest(
         String email,
 
         @Past(message = "Date of birth must be in the past")
-        LocalDate dateOfBirth,
-
-        @NotBlank(message = "Password is required")
-        @Size(
-                min = 8,
-                max = 100,
-                message = "Password must be between 8 and 100 characters"
-        )
-        String password
+        LocalDate dateOfBirth
 ) {
 }

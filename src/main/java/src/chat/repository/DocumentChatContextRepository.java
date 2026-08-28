@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import src.entity.ChatSession;
 import src.entity.Document;
 import src.entity.DocumentChatContext;
+import src.entity.User;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,5 +30,11 @@ public interface DocumentChatContextRepository
     void deleteByChatSessionAndDocument(
             ChatSession chatSession,
             Document document
+    );
+
+    Optional<DocumentChatContext>
+    findFirstByDocumentAndChatSession_UserOrderByChatSession_UpdatedAtDesc(
+            Document document,
+            User user
     );
 }

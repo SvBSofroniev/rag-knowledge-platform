@@ -346,3 +346,8 @@ CREATE INDEX idx_refresh_tokens_active
 
     CREATE INDEX idx_chat_message_sources_message
         ON chat_message_sources(message_id);
+
+        ALTER TABLE users
+            ADD COLUMN first_name VARCHAR(100),
+            ADD COLUMN last_name VARCHAR(100),
+            ADD COLUMN date_of_birth DATE;

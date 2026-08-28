@@ -22,6 +22,17 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import src.document.dto.DocumentContentResponse;
+import src.document.dto.DocumentDetailsResponse;
+import src.document.repository.DocumentChunkRepository;
+import src.entity.DocumentChunk;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
+
 @Service
 @RequiredArgsConstructor
 public class DocumentService {
@@ -37,6 +48,7 @@ public class DocumentService {
     private final FileStorageService fileStorageService;
     private final WorkspacePermissionService permissionService;
     private final DocumentRepository documentRepository;
+    private final DocumentChunkRepository documentChunkRepository;
 
     @Transactional
     public DocumentResponse uploadDocument(
@@ -178,6 +190,268 @@ public class DocumentService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public DocumentDetailsResponse getDocumentDetails(
+            UUID documentId,
+            User currentUser
+    ) {
+        Document document =
+                getDocumentOrThrow(
+                        documentId
+                );
+
+        requireDocumentAccess(
+                document,
+                currentUser
+        );
+
+        long chunkCount =
+                documentChunkRepository
+                        .countByDocument(
+                                document
+                        );
+
+        return new DocumentDetailsResponse(
+                document.getId(),
+                document.getWorkspace().getId(),
+                document.getWorkspace().getName(),
+                document.getTitle(),
+                document.getOriginalFilename(),
+                document.getFileType(),
+                document.getFileSize(),
+                document.getStatus(),
+                document.getProcessingError(),
+                document.getUploadedBy().getId(),
+                document.getUploadedBy().getUsername(),
+                chunkCount,
+                document.getCreatedAt(),
+                document.getUpdatedAt()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentFile getDocumentFile(
+            UUID documentId,
+            User currentUser
+    ) {
+        Document document =
+                getDocumentOrThrow(
+                        documentId
+                );
+
+        requireDocumentAccess(
+                document,
+                currentUser
+        );
+
+        Path path =
+                fileStorageService
+                        .resolveStoredFile(
+                                document.getStoragePath()
+                        );
+
+        Resource resource =
+                new FileSystemResource(
+                        path
+                );
+
+        String contentType =
+                resolveContentType(
+                        document,
+                        path
+                );
+
+        return new DocumentFile(
+                resource,
+                document.getOriginalFilename(),
+                contentType,
+                document.getFileSize()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentContentResponse getDocumentContent(
+            UUID documentId,
+            User currentUser
+    ) {
+        Document document =
+                getDocumentOrThrow(
+                        documentId
+                );
+
+        requireDocumentAccess(
+                document,
+                currentUser
+        );
+
+        if (document.getStatus() !=
+                DocumentStatus.READY) {
+
+            throw new BadRequestException(
+                    "Document content is available only when processing is complete"
+            );
+        }
+
+        List<DocumentChunk> chunks =
+                documentChunkRepository
+                        .findByDocumentOrderByChunkIndexAsc(
+                                document
+                        );
+
+        String content =
+                reconstructDocumentContent(
+                        chunks
+                );
+
+        return new DocumentContentResponse(
+                document.getId(),
+                document.getTitle(),
+                chunks.size(),
+                content
+        );
+    }
+
+    private String reconstructDocumentContent(
+            List<DocumentChunk> chunks
+    ) {
+        if (chunks == null ||
+                chunks.isEmpty()) {
+
+            return "";
+        }
+
+        StringBuilder result =
+                new StringBuilder();
+
+        String previousContent = null;
+
+        for (DocumentChunk chunk : chunks) {
+            if (chunk == null ||
+                    chunk.getContent() == null ||
+                    chunk.getContent().isBlank()) {
+
+                continue;
+            }
+
+            String currentContent =
+                    chunk.getContent();
+
+            if (previousContent != null) {
+                currentContent =
+                        removeChunkOverlap(
+                                previousContent,
+                                currentContent
+                        );
+            }
+
+            if (!currentContent.isBlank()) {
+                if (!result.isEmpty()) {
+                    result.append("\n\n");
+                }
+
+                result.append(
+                        currentContent
+                );
+            }
+
+            /*
+             * Keep the original content here because the next
+             * persisted chunk overlaps with the original chunk.
+             */
+            previousContent =
+                    chunk.getContent();
+        }
+
+        return result
+                .toString()
+                .trim();
+    }
+    private String removeChunkOverlap(
+            String previousContent,
+            String currentContent
+    ) {
+        if (previousContent == null ||
+                previousContent.isBlank() ||
+                currentContent == null ||
+                currentContent.isBlank()) {
+
+            return currentContent;
+        }
+
+        int maximumOverlap =
+                Math.min(
+                        1000,
+                        Math.min(
+                                previousContent.length(),
+                                currentContent.length()
+                        )
+                );
+
+        final int minimumOverlap = 30;
+
+        for (
+                int overlapLength =
+                maximumOverlap;
+                overlapLength >=
+                        minimumOverlap;
+                overlapLength--
+        ) {
+            int previousStart =
+                    previousContent.length()
+                            - overlapLength;
+
+            if (previousContent.regionMatches(
+                    previousStart,
+                    currentContent,
+                    0,
+                    overlapLength
+            )) {
+                return currentContent
+                        .substring(
+                                overlapLength
+                        )
+                        .stripLeading();
+            }
+        }
+
+        return currentContent;
+    }
+    private String resolveContentType(
+            Document document,
+            Path path
+    ) {
+        String storedContentType =
+                document.getFileType();
+
+        if (storedContentType != null &&
+                !storedContentType.isBlank() &&
+                !"application/octet-stream"
+                        .equalsIgnoreCase(
+                                storedContentType
+                        )) {
+
+            return storedContentType;
+        }
+
+        try {
+            String detected =
+                    Files.probeContentType(
+                            path
+                    );
+
+            if (detected != null &&
+                    !detected.isBlank()) {
+
+                return detected;
+            }
+
+        } catch (IOException ignored) {
+            // Fall through to the default.
+        }
+
+        return "application/octet-stream";
+    }
+
     private String validateAndResolveFilename(
             MultipartFile file
     ) {
@@ -234,5 +508,13 @@ public class DocumentService {
         }
 
         return contentType;
+    }
+
+    public record DocumentFile(
+            Resource resource,
+            String originalFilename,
+            String contentType,
+            Long fileSize
+    ) {
     }
 }

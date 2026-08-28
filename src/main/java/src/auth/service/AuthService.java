@@ -14,7 +14,6 @@ import src.common.exception.ConflictException;
 import src.common.exception.UnauthorizedException;
 import src.entity.User;
 
-import java.time.LocalDateTime;
 import java.util.Locale;
 
 @Service
@@ -27,11 +26,23 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
 
     public AuthResponse register(RegisterRequest request) {
+
         String normalizedEmail =
-                request.email().trim().toLowerCase();
+                request.email()
+                        .trim()
+                        .toLowerCase(Locale.ROOT);
 
         String normalizedUsername =
-                request.username().trim();
+                request.username()
+                        .trim();
+
+        String normalizedFirstName =
+                request.firstName()
+                        .trim();
+
+        String normalizedLastName =
+                request.lastName()
+                        .trim();
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ConflictException(
@@ -46,40 +57,73 @@ public class AuthService {
         }
 
         User user = new User();
-        user.setUsername(normalizedUsername);
-        user.setEmail(normalizedEmail);
-        user.setPasswordHash(
-                passwordEncoder.encode(request.password())
+
+        user.setUsername(
+                normalizedUsername
         );
+
+        user.setEmail(
+                normalizedEmail
+        );
+
+        user.setFirstName(
+                normalizedFirstName
+        );
+
+        user.setLastName(
+                normalizedLastName
+        );
+
+        user.setDateOfBirth(
+                request.dateOfBirth()
+        );
+
+        user.setPasswordHash(
+                passwordEncoder.encode(
+                        request.password()
+                )
+        );
+
         user.setRole("USER");
         user.setEnabled(true);
         user.setAccountNonLocked(true);
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
 
-        User savedUser = userRepository.save(user);
+        User savedUser =
+                userRepository.save(user);
 
         String accessToken =
-                jwtService.generateToken(savedUser);
+                jwtService.generateToken(
+                        savedUser
+                );
 
         String refreshToken =
-                refreshTokenService.createRefreshToken(savedUser);
+                refreshTokenService.createRefreshToken(
+                        savedUser
+                );
 
-        return buildAuthResponse(savedUser, accessToken, refreshToken);
+        return buildAuthResponse(
+                savedUser,
+                accessToken,
+                refreshToken
+        );
     }
 
-    public AuthResponse login(LoginRequest request) {
-        String normalizedEmail = request.email()
-                .trim()
-                .toLowerCase(Locale.ROOT);
+    public AuthResponse login(
+            LoginRequest request
+    ) {
+        String normalizedEmail =
+                request.email()
+                        .trim()
+                        .toLowerCase(Locale.ROOT);
 
-        User user = userRepository
-                .findByEmail(normalizedEmail)
-                .orElseThrow(() ->
-                        new UnauthorizedException(
-                                "Invalid email or password"
-                        )
-                );
+        User user =
+                userRepository
+                        .findByEmail(normalizedEmail)
+                        .orElseThrow(() ->
+                                new UnauthorizedException(
+                                        "Invalid email or password"
+                                )
+                        );
 
         if (!passwordEncoder.matches(
                 request.password(),
@@ -106,7 +150,9 @@ public class AuthService {
                 jwtService.generateToken(user);
 
         String refreshToken =
-                refreshTokenService.createRefreshToken(user);
+                refreshTokenService.createRefreshToken(
+                        user
+                );
 
         return buildAuthResponse(
                 user,
@@ -119,11 +165,13 @@ public class AuthService {
             RefreshTokenRequest request
     ) {
         RefreshToken currentToken =
-                refreshTokenService.validateRefreshToken(
-                        request.refreshToken()
-                );
+                refreshTokenService
+                        .validateRefreshToken(
+                                request.refreshToken()
+                        );
 
-        User user = currentToken.getUser();
+        User user =
+                currentToken.getUser();
 
         refreshTokenService.revokeRefreshToken(
                 request.refreshToken()
@@ -133,7 +181,8 @@ public class AuthService {
                 jwtService.generateToken(user);
 
         String newRefreshToken =
-                refreshTokenService.createRefreshToken(user);
+                refreshTokenService
+                        .createRefreshToken(user);
 
         return buildAuthResponse(
                 user,
@@ -142,11 +191,19 @@ public class AuthService {
         );
     }
 
-    public void logout(RefreshTokenRequest request) {
-        refreshTokenService.revokeRefreshToken(request.refreshToken());
+    public void logout(
+            RefreshTokenRequest request
+    ) {
+        refreshTokenService.revokeRefreshToken(
+                request.refreshToken()
+        );
     }
 
-    private AuthResponse buildAuthResponse(User user, String accessToken, String refreshToken) {
+    private AuthResponse buildAuthResponse(
+            User user,
+            String accessToken,
+            String refreshToken
+    ) {
         return new AuthResponse(
                 accessToken,
                 refreshToken,

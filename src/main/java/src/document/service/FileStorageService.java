@@ -109,6 +109,54 @@ public class FileStorageService {
         }
     }
 
+    public Path resolveStoredFile(
+            String filePath
+    ) {
+        if (filePath == null ||
+                filePath.isBlank()) {
+
+            throw new BadRequestException(
+                    "Stored file path cannot be empty"
+            );
+        }
+
+        try {
+            Path targetPath =
+                    Paths.get(filePath)
+                            .toAbsolutePath()
+                            .normalize();
+
+            ensurePathIsInsideUploadDirectory(
+                    targetPath
+            );
+
+            if (!Files.exists(targetPath)) {
+                throw new FileStorageException(
+                        "Stored file does not exist"
+                );
+            }
+
+            if (!Files.isRegularFile(targetPath)) {
+                throw new FileStorageException(
+                        "Stored file path is not a regular file"
+                );
+            }
+
+            if (!Files.isReadable(targetPath)) {
+                throw new FileStorageException(
+                        "Stored file is not readable"
+                );
+            }
+
+            return targetPath;
+
+        } catch (InvalidPathException exception) {
+            throw new BadRequestException(
+                    "Stored file path is invalid"
+            );
+        }
+    }
+
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException(
