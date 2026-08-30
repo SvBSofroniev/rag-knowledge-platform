@@ -2,6 +2,7 @@ package src.document.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.ConflictException;
 import src.common.exception.DocumentProcessingException;
 import src.common.exception.ResourceNotFoundException;
@@ -66,21 +67,33 @@ public class DocumentProcessingService {
     }
 
     private Document getDocument(UUID documentId) {
-        return documentRepository.findById(documentId)
+        return documentRepository
+                .findById(documentId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Document not found")
+                        new ResourceNotFoundException(
+                                ApiErrorCodes.DOCUMENT_NOT_FOUND,
+                                "Document not found"
+                        )
                 );
     }
 
-    private void validateStatus(Document document) {
-        if (document.getStatus() == DocumentStatus.PROCESSING) {
+    private void validateStatus(
+            Document document
+    ) {
+        if (document.getStatus() ==
+                DocumentStatus.PROCESSING) {
+
             throw new ConflictException(
+                    ApiErrorCodes.DOCUMENT_ALREADY_PROCESSING,
                     "Document is already being processed"
             );
         }
 
-        if (document.getStatus() == DocumentStatus.READY) {
+        if (document.getStatus() ==
+                DocumentStatus.READY) {
+
             throw new ConflictException(
+                    ApiErrorCodes.DOCUMENT_ALREADY_PROCESSED,
                     "Document has already been processed"
             );
         }

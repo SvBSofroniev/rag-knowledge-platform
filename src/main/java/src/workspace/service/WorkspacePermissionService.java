@@ -2,6 +2,7 @@ package src.workspace.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.ForbiddenOperationException;
 import src.common.exception.ResourceNotFoundException;
 import src.entity.User;
@@ -20,10 +21,14 @@ public class WorkspacePermissionService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMemberRepository memberRepository;
 
-    public Workspace getWorkspaceOrThrow(UUID workspaceId) {
-        return workspaceRepository.findById(workspaceId)
+    public Workspace getWorkspaceOrThrow(
+            UUID workspaceId
+    ) {
+        return workspaceRepository
+                .findById(workspaceId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
+                                ApiErrorCodes.WORKSPACE_NOT_FOUND,
                                 "Workspace not found"
                         )
                 );
@@ -34,10 +39,18 @@ public class WorkspacePermissionService {
             User user
     ) {
         return memberRepository
-                .findByWorkspaceAndUser(workspace, user)
+                .findByWorkspaceAndUser(
+                        workspace,
+                        user
+                )
                 .orElseThrow(() ->
-                        new ForbiddenOperationException(
-                                "You are not a member of this workspace"
+                        /*
+                         * Do not reveal whether a workspace
+                         * exists to a user who cannot access it.
+                         */
+                        new ResourceNotFoundException(
+                                ApiErrorCodes.WORKSPACE_NOT_FOUND,
+                                "Workspace not found"
                         )
                 );
     }
@@ -47,9 +60,14 @@ public class WorkspacePermissionService {
             User user
     ) {
         Workspace workspace =
-                getWorkspaceOrThrow(workspaceId);
+                getWorkspaceOrThrow(
+                        workspaceId
+                );
 
-        return getMemberOrThrow(workspace, user);
+        return getMemberOrThrow(
+                workspace,
+                user
+        );
     }
 
     public WorkspaceMember requireAdminOrOwner(
@@ -57,11 +75,17 @@ public class WorkspacePermissionService {
             User user
     ) {
         WorkspaceMember member =
-                requireMember(workspaceId, user);
+                requireMember(
+                        workspaceId,
+                        user
+                );
 
-        if (member.getRole() != WorkspaceRole.ADMIN &&
-                member.getRole() != WorkspaceRole.OWNER) {
+        if (
+                member.getRole() != WorkspaceRole.ADMIN &&
+                        member.getRole() != WorkspaceRole.OWNER
+        ) {
             throw new ForbiddenOperationException(
+                    ApiErrorCodes.WORKSPACE_ADMIN_REQUIRED,
                     "Only workspace administrators or the owner can perform this action"
             );
         }
@@ -74,10 +98,16 @@ public class WorkspacePermissionService {
             User user
     ) {
         WorkspaceMember member =
-                requireMember(workspaceId, user);
+                requireMember(
+                        workspaceId,
+                        user
+                );
 
-        if (member.getRole() != WorkspaceRole.OWNER) {
+        if (
+                member.getRole() != WorkspaceRole.OWNER
+        ) {
             throw new ForbiddenOperationException(
+                    ApiErrorCodes.WORKSPACE_OWNER_REQUIRED,
                     "Only the workspace owner can perform this action"
             );
         }
@@ -90,9 +120,14 @@ public class WorkspacePermissionService {
             User user
     ) {
         Workspace workspace =
-                getWorkspaceOrThrow(workspaceId);
+                getWorkspaceOrThrow(
+                        workspaceId
+                );
 
         return memberRepository
-                .existsByWorkspaceAndUser(workspace, user);
+                .existsByWorkspaceAndUser(
+                        workspace,
+                        user
+                );
     }
 }

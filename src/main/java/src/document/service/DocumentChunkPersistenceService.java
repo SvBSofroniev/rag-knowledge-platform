@@ -3,6 +3,7 @@ package src.document.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.DocumentProcessingException;
 import src.common.exception.ResourceNotFoundException;
 import src.document.repository.DocumentChunkRepository;
@@ -32,6 +33,7 @@ public class DocumentChunkPersistenceService {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
+                                ApiErrorCodes.DOCUMENT_NOT_FOUND,
                                 "Document not found"
                         )
                 );

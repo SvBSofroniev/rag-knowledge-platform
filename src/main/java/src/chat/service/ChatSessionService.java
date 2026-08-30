@@ -9,6 +9,7 @@ import src.chat.dto.CreateChatSessionRequest;
 import src.chat.dto.UpdateChatSessionRequest;
 import src.chat.repository.ChatMessageRepository;
 import src.chat.repository.ChatSessionRepository;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 import src.common.exception.ResourceNotFoundException;
 import src.entity.ChatMessage;
@@ -143,6 +144,7 @@ public class ChatSessionService {
                 .findById(sessionId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
+                                ApiErrorCodes.CHAT_SESSION_NOT_FOUND,
                                 "Chat session not found"
                         )
                 );
@@ -167,6 +169,7 @@ public class ChatSessionService {
                 .getId()
                 .equals(currentUser.getId())) {
             throw new ResourceNotFoundException(
+                    ApiErrorCodes.CHAT_SESSION_NOT_FOUND,
                     "Chat session not found"
             );
         }
@@ -230,6 +233,7 @@ public class ChatSessionService {
     ) {
         if (request == null) {
             throw new BadRequestException(
+                    ApiErrorCodes.CHAT_SESSION_UPDATE_REQUIRED,
                     "Chat session update request cannot be empty"
             );
         }
@@ -238,6 +242,7 @@ public class ChatSessionService {
 
         if (title == null || title.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.CHAT_TITLE_REQUIRED,
                     "Chat session title cannot be empty"
             );
         }
@@ -252,6 +257,7 @@ public class ChatSessionService {
     private void validateTitleLength(String title) {
         if (title.length() > MAX_TITLE_LENGTH) {
             throw new BadRequestException(
+                    ApiErrorCodes.CHAT_TITLE_TOO_LONG,
                     "Chat session title cannot exceed " +
                             MAX_TITLE_LENGTH +
                             " characters"

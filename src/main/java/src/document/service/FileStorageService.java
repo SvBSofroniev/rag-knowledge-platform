@@ -3,6 +3,7 @@ package src.document.service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 import src.common.exception.FileStorageException;
 
@@ -83,6 +84,7 @@ public class FileStorageService {
     public void delete(String filePath) {
         if (filePath == null || filePath.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.STORED_FILE_PATH_REQUIRED,
                     "Stored file path cannot be empty"
             );
         }
@@ -98,9 +100,9 @@ public class FileStorageService {
 
         } catch (InvalidPathException exception) {
             throw new BadRequestException(
+                    ApiErrorCodes.STORED_FILE_PATH_INVALID,
                     "Stored file path is invalid"
             );
-
         } catch (IOException exception) {
             throw new FileStorageException(
                     "Could not delete the stored file",
@@ -116,6 +118,7 @@ public class FileStorageService {
                 filePath.isBlank()) {
 
             throw new BadRequestException(
+                    ApiErrorCodes.STORED_FILE_PATH_REQUIRED,
                     "Stored file path cannot be empty"
             );
         }
@@ -152,6 +155,7 @@ public class FileStorageService {
 
         } catch (InvalidPathException exception) {
             throw new BadRequestException(
+                    ApiErrorCodes.STORED_FILE_PATH_INVALID,
                     "Stored file path is invalid"
             );
         }
@@ -160,6 +164,7 @@ public class FileStorageService {
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_FILE_EMPTY,
                     "Uploaded file cannot be empty"
             );
         }
@@ -173,6 +178,7 @@ public class FileStorageService {
         if (suppliedFilename == null ||
                 suppliedFilename.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_FILENAME_MISSING,
                     "Uploaded file name is missing"
             );
         }
@@ -185,6 +191,7 @@ public class FileStorageService {
 
             if (safeFilename.isBlank()) {
                 throw new BadRequestException(
+                        ApiErrorCodes.DOCUMENT_FILENAME_INVALID,
                         "Uploaded file name is invalid"
                 );
             }
@@ -193,6 +200,7 @@ public class FileStorageService {
 
         } catch (InvalidPathException exception) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_FILENAME_INVALID,
                     "Uploaded file name is invalid"
             );
         }
@@ -216,6 +224,7 @@ public class FileStorageService {
          */
         if (!extension.matches("\\.[a-z0-9]{1,15}")) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_EXTENSION_INVALID,
                     "Uploaded file extension is invalid"
             );
         }
@@ -228,6 +237,7 @@ public class FileStorageService {
     ) {
         if (!targetPath.startsWith(uploadDir)) {
             throw new BadRequestException(
+                    ApiErrorCodes.INVALID_FILE_STORAGE_PATH,
                     "Invalid file storage path"
             );
         }

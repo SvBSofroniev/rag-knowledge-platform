@@ -2,10 +2,7 @@ package src.document.service;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
-import src.common.exception.AiModelResponseException;
-import src.common.exception.AiServiceUnavailableException;
-import src.common.exception.ApiException;
-import src.common.exception.BadRequestException;
+import src.common.exception.*;
 import src.document.dto.DocumentDetailsResponse;
 import src.document.dto.DocumentInsightsResponse;
 import src.document.util.DocumentStatus;
@@ -77,12 +74,14 @@ public class DocumentInsightsService {
 
         if (document.status() != DocumentStatus.READY) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_NOT_READY,
                     "AI insights can only be generated for READY documents"
             );
         }
 
         if (document.chunkCount() == 0) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_CONTENT_EMPTY,
                     "Document contains no processed text"
             );
         }
@@ -96,6 +95,7 @@ public class DocumentInsightsService {
          */
         if (document.chunkCount() > MAX_INSIGHT_CHUNKS) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_INSIGHTS_TOO_LARGE,
                     "AI insights currently support documents with up to " +
                             MAX_INSIGHT_CHUNKS +
                             " chunks"
@@ -122,6 +122,7 @@ public class DocumentInsightsService {
 
         if (sources.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_CONTENT_EMPTY,
                     "Document contains no processed text"
             );
         }
@@ -133,6 +134,7 @@ public class DocumentInsightsService {
 
         if (cleanedChunks.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_CONTENT_EMPTY,
                     "Document contains no usable processed text"
             );
         }

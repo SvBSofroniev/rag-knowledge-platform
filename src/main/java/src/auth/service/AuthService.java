@@ -10,6 +10,7 @@ import src.auth.dto.RegisterRequest;
 import src.auth.entity.RefreshToken;
 import src.auth.jwt.JwtService;
 import src.auth.repository.UserRepository;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.ConflictException;
 import src.common.exception.UnauthorizedException;
 import src.entity.User;
@@ -25,8 +26,9 @@ public class AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
 
-    public AuthResponse register(RegisterRequest request) {
-
+    public AuthResponse register(
+            RegisterRequest request
+    ) {
         String normalizedEmail =
                 request.email()
                         .trim()
@@ -44,16 +46,20 @@ public class AuthService {
                 request.lastName()
                         .trim();
 
-        if (userRepository.existsByEmail(normalizedEmail)) {
+        if (userRepository.existsByEmail(
+                normalizedEmail
+        )) {
             throw new ConflictException(
-                    "EMAIL_ALREADY_EXISTS",
+                    ApiErrorCodes.EMAIL_ALREADY_EXISTS,
                     "An account with this email already exists"
             );
         }
 
-        if (userRepository.existsByUsername(normalizedUsername)) {
+        if (userRepository.existsByUsername(
+                normalizedUsername
+        )) {
             throw new ConflictException(
-                    "USERNAME_ALREADY_EXISTS",
+                    ApiErrorCodes.USERNAME_ALREADY_EXISTS,
                     "An account with this username already exists"
             );
         }
@@ -99,9 +105,10 @@ public class AuthService {
                 );
 
         String refreshToken =
-                refreshTokenService.createRefreshToken(
-                        savedUser
-                );
+                refreshTokenService
+                        .createRefreshToken(
+                                savedUser
+                        );
 
         return buildAuthResponse(
                 savedUser,
@@ -120,10 +127,12 @@ public class AuthService {
 
         User user =
                 userRepository
-                        .findByEmail(normalizedEmail)
+                        .findByEmail(
+                                normalizedEmail
+                        )
                         .orElseThrow(() ->
                                 new UnauthorizedException(
-                                        "INVALID_CREDENTIALS",
+                                        ApiErrorCodes.INVALID_CREDENTIALS,
                                         "Invalid email or password"
                                 )
                         );
@@ -133,32 +142,35 @@ public class AuthService {
                 user.getPasswordHash()
         )) {
             throw new UnauthorizedException(
-                    "INVALID_CREDENTIALS",
+                    ApiErrorCodes.INVALID_CREDENTIALS,
                     "Invalid email or password"
             );
         }
 
         if (!user.isEnabled()) {
             throw new UnauthorizedException(
-                    "ACCOUNT_DISABLED",
+                    ApiErrorCodes.ACCOUNT_DISABLED,
                     "Account is disabled"
             );
         }
 
         if (!user.isAccountNonLocked()) {
             throw new UnauthorizedException(
-                    "ACCOUNT_LOCKED",
+                    ApiErrorCodes.ACCOUNT_LOCKED,
                     "Account is locked"
             );
         }
 
         String accessToken =
-                jwtService.generateToken(user);
-
-        String refreshToken =
-                refreshTokenService.createRefreshToken(
+                jwtService.generateToken(
                         user
                 );
+
+        String refreshToken =
+                refreshTokenService
+                        .createRefreshToken(
+                                user
+                        );
 
         return buildAuthResponse(
                 user,
@@ -179,16 +191,21 @@ public class AuthService {
         User user =
                 currentToken.getUser();
 
-        refreshTokenService.revokeRefreshToken(
-                request.refreshToken()
-        );
+        refreshTokenService
+                .revokeRefreshToken(
+                        request.refreshToken()
+                );
 
         String accessToken =
-                jwtService.generateToken(user);
+                jwtService.generateToken(
+                        user
+                );
 
         String newRefreshToken =
                 refreshTokenService
-                        .createRefreshToken(user);
+                        .createRefreshToken(
+                                user
+                        );
 
         return buildAuthResponse(
                 user,
@@ -200,9 +217,10 @@ public class AuthService {
     public void logout(
             RefreshTokenRequest request
     ) {
-        refreshTokenService.revokeRefreshToken(
-                request.refreshToken()
-        );
+        refreshTokenService
+                .revokeRefreshToken(
+                        request.refreshToken()
+                );
     }
 
     private AuthResponse buildAuthResponse(

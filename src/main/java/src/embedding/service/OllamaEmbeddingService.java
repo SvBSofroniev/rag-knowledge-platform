@@ -5,6 +5,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
 import src.common.exception.AiModelResponseException;
 import src.common.exception.AiServiceUnavailableException;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 
 @Service
@@ -40,6 +41,7 @@ public class OllamaEmbeddingService implements EmbeddingService {
     private String validateAndNormalizeText(String text) {
         if (text == null || text.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.EMBEDDING_INPUT_REQUIRED,
                     "Text for embedding cannot be empty"
             );
         }
@@ -48,6 +50,7 @@ public class OllamaEmbeddingService implements EmbeddingService {
 
         if (normalizedText.length() > MAX_TEXT_LENGTH) {
             throw new BadRequestException(
+                    ApiErrorCodes.EMBEDDING_INPUT_TOO_LONG,
                     "Text for embedding cannot exceed " +
                             MAX_TEXT_LENGTH +
                             " characters"

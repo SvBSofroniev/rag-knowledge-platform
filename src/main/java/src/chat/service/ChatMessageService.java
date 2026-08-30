@@ -10,6 +10,7 @@ import src.chat.dto.SendChatMessageRequest;
 import src.chat.repository.AiQueryRepository;
 import src.chat.repository.ChatMessageRepository;
 import src.chat.repository.ChatSessionRepository;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 import src.entity.AiQuery;
 import src.entity.ChatMessage;
@@ -76,7 +77,10 @@ public class ChatMessageService {
 
         List<UUID> attachedDocumentIds =
                 chatDocumentContextService
-                        .getAttachedDocumentIds(session);
+                        .getAttachedDocumentIds(
+                                sessionId,
+                                currentUser
+                        );
 
         if (attachedDocumentIds.isEmpty()) {
             ChatMessage assistantMessage = saveMessage(
@@ -154,6 +158,7 @@ public class ChatMessageService {
     ) {
         if (request == null) {
             throw new BadRequestException(
+                    ApiErrorCodes.CHAT_MESSAGE_REQUEST_REQUIRED,
                     "Message request cannot be empty"
             );
         }
@@ -162,15 +167,16 @@ public class ChatMessageService {
 
         if (message == null || message.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.CHAT_MESSAGE_REQUIRED,
                     "Message cannot be empty"
             );
         }
 
-        if (message.trim().length() > MAX_MESSAGE_LENGTH) {
+        if (message == null || message.isBlank()) {
+
             throw new BadRequestException(
-                    "Message cannot exceed " +
-                            MAX_MESSAGE_LENGTH +
-                            " characters"
+                    ApiErrorCodes.CHAT_MESSAGE_REQUIRED,
+                    "Message cannot be empty"
             );
         }
     }

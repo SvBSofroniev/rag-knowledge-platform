@@ -4,8 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
-import src.common.exception.ForbiddenOperationException;
 import src.common.exception.ResourceNotFoundException;
 import src.document.dto.DocumentResponse;
 import src.document.dto.GlobalDocumentResponse;
@@ -16,7 +16,6 @@ import src.entity.User;
 import src.entity.Workspace;
 import src.entity.WorkspaceMember;
 import src.workspace.service.WorkspacePermissionService;
-import src.workspace.util.WorkspaceRole;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -32,7 +31,6 @@ import src.entity.DocumentChunk;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
@@ -76,8 +74,11 @@ public class DocumentService {
             document.setUploadedBy(currentUser);
             document.setTitle(originalFilename);
             document.setOriginalFilename(originalFilename);
-            document.setFileType(resolveFileType(file));
-            document.setFileSize(file.getSize());
+            document.setFileType(
+                    resolveFileType(
+                            originalFilename
+                    )
+            );            document.setFileSize(file.getSize());
             document.setStoragePath(storedFile.filePath());
             document.setStatus(DocumentStatus.PENDING);
             document.setProcessingError(null);
@@ -130,31 +131,23 @@ public class DocumentService {
             UUID documentId,
             User currentUser
     ) {
-        Document document = getDocumentOrThrow(documentId);
-
-        WorkspaceMember membership =
-                permissionService.requireMember(
-                        document.getWorkspace().getId(),
-                        currentUser
+        Document document =
+                getDocumentOrThrow(
+                        documentId
                 );
 
-        boolean isUploader =
-                document.getUploadedBy()
-                        .getId()
-                        .equals(currentUser.getId());
+        permissionService.requireAdminOrOwner(
+                document.getWorkspace().getId(),
+                currentUser
+        );
 
-        boolean isAdminOrOwner =
-                membership.getRole() == WorkspaceRole.ADMIN ||
-                        membership.getRole() == WorkspaceRole.OWNER;
+        fileStorageService.delete(
+                document.getStoragePath()
+        );
 
-        if (!isUploader && !isAdminOrOwner) {
-            throw new ForbiddenOperationException(
-                    "You do not have permission to delete this document"
-            );
-        }
-
-        fileStorageService.delete(document.getStoragePath());
-        documentRepository.delete(document);
+        documentRepository.delete(
+                document
+        );
     }
 
     public void requireDocumentAccess(
@@ -171,6 +164,7 @@ public class DocumentService {
         return documentRepository.findById(documentId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
+                                ApiErrorCodes.DOCUMENT_NOT_FOUND,
                                 "Document not found"
                         )
                 );
@@ -289,6 +283,7 @@ public class DocumentService {
                 DocumentStatus.READY) {
 
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_NOT_READY,
                     "Document content is available only when processing is complete"
             );
         }
@@ -494,6 +489,7 @@ public class DocumentService {
     ) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_FILE_EMPTY,
                     "Uploaded file cannot be empty"
             );
         }
@@ -503,6 +499,7 @@ public class DocumentService {
         if (suppliedFilename == null ||
                 suppliedFilename.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_FILENAME_MISSING,
                     "Uploaded file name is missing"
             );
         }
@@ -515,6 +512,7 @@ public class DocumentService {
 
         if (!SUPPORTED_EXTENSIONS.contains(extension)) {
             throw new BadRequestException(
+                    ApiErrorCodes.UNSUPPORTED_DOCUMENT_TYPE,
                     "Unsupported document extension: " + extension
             );
         }
@@ -528,6 +526,7 @@ public class DocumentService {
         if (dotIndex < 0 ||
                 dotIndex == filename.length() - 1) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_EXTENSION_REQUIRED,
                     "Document must have a supported file extension"
             );
         }
@@ -537,14 +536,28 @@ public class DocumentService {
                 .toLowerCase();
     }
 
-    private String resolveFileType(MultipartFile file) {
-        String contentType = file.getContentType();
+    private String resolveFileType(
+            String filename
+    ) {
+        String extension =
+                getExtension(filename);
 
-        if (contentType == null || contentType.isBlank()) {
-            return "application/octet-stream";
-        }
+        return switch (extension) {
+            case "pdf" ->
+                    "application/pdf";
 
-        return contentType;
+            case "docx" ->
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+            case "txt" ->
+                    "text/plain";
+
+            case "md", "markdown" ->
+                    "text/markdown";
+
+            default ->
+                    "application/octet-stream";
+        };
     }
 
     public record DocumentFile(

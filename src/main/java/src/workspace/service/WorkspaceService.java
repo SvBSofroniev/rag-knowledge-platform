@@ -4,10 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.auth.repository.UserRepository;
-import src.common.exception.BadRequestException;
-import src.common.exception.ConflictException;
-import src.common.exception.ForbiddenOperationException;
-import src.common.exception.ResourceNotFoundException;
+import src.common.exception.*;
 import src.entity.User;
 import src.entity.Workspace;
 import src.entity.WorkspaceMember;
@@ -84,7 +81,10 @@ public class WorkspaceService {
 
         User userToAdd = userRepository.findById(request.userId())
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
+                        new ResourceNotFoundException(
+                                ApiErrorCodes.USER_NOT_FOUND,
+                                "User not found"
+                        )
                 );
 
         if (memberRepository.existsByWorkspaceAndUser(
@@ -92,6 +92,7 @@ public class WorkspaceService {
                 userToAdd
         )) {
             throw new ConflictException(
+                    ApiErrorCodes.WORKSPACE_MEMBER_ALREADY_EXISTS,
                     "User is already a workspace member"
             );
         }
@@ -117,6 +118,7 @@ public class WorkspaceService {
                 memberRepository.findById(memberId)
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
+                                        ApiErrorCodes.WORKSPACE_MEMBER_NOT_FOUND,
                                         "Workspace member not found"
                                 )
                         );
@@ -125,24 +127,28 @@ public class WorkspaceService {
                 .getId()
                 .equals(workspaceId)) {
             throw new ResourceNotFoundException(
+                    ApiErrorCodes.WORKSPACE_MEMBER_NOT_FOUND,
                     "Workspace member not found"
             );
         }
 
         if (targetMember.getRole() == WorkspaceRole.OWNER) {
             throw new ForbiddenOperationException(
+                    ApiErrorCodes.WORKSPACE_OWNER_ROLE_IMMUTABLE,
                     "The workspace owner's role cannot be changed"
             );
         }
 
         if (request.role() == WorkspaceRole.OWNER) {
             throw new BadRequestException(
+                    ApiErrorCodes.WORKSPACE_OWNER_ASSIGNMENT_FORBIDDEN,
                     "The OWNER role cannot be assigned through this operation"
             );
         }
 
         if (targetMember.getRole() == request.role()) {
             throw new ConflictException(
+                    ApiErrorCodes.WORKSPACE_ROLE_UNCHANGED,
                     "The member already has this role"
             );
         }
@@ -152,32 +158,76 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public void removeMember(UUID workspaceId, UUID memberId, User currentUser) {
-        permissionService.requireAdminOrOwner(workspaceId, currentUser);
+    public void removeMember(
+            UUID workspaceId,
+            UUID memberId,
+            User currentUser
+    ) {
+        WorkspaceMember currentMember =
+                permissionService
+                        .requireAdminOrOwner(
+                                workspaceId,
+                                currentUser
+                        );
 
         WorkspaceMember targetMember =
-                memberRepository.findById(memberId)
+                memberRepository
+                        .findById(memberId)
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
+                                        ApiErrorCodes.WORKSPACE_MEMBER_NOT_FOUND,
                                         "Workspace member not found"
                                 )
                         );
 
-        if (!targetMember.getWorkspace()
+        /*
+         * Prevent using a member ID that belongs
+         * to another workspace.
+         */
+        if (!targetMember
+                .getWorkspace()
                 .getId()
                 .equals(workspaceId)) {
+
             throw new ResourceNotFoundException(
+                    ApiErrorCodes.WORKSPACE_MEMBER_NOT_FOUND,
                     "Workspace member not found"
             );
         }
 
-        if (targetMember.getRole() == WorkspaceRole.OWNER) {
+        /*
+         * Ownership cannot be removed.
+         */
+        if (
+                targetMember.getRole() ==
+                        WorkspaceRole.OWNER
+        ) {
             throw new ForbiddenOperationException(
-                    "The workspace owner cannot be removed"
+                    ApiErrorCodes.ADMIN_CANNOT_REMOVE_ADMIN,
+                    "Only the workspace owner can remove an administrator"
             );
         }
 
-        memberRepository.delete(targetMember);
+        /*
+         * ADMIN can remove MEMBER only.
+         *
+         * Only OWNER can remove another ADMIN.
+         */
+        if (
+                currentMember.getRole() ==
+                        WorkspaceRole.ADMIN &&
+                        targetMember.getRole() ==
+                                WorkspaceRole.ADMIN
+        ) {
+            throw new ForbiddenOperationException(
+                    ApiErrorCodes.ADMIN_CANNOT_REMOVE_ADMIN,
+                    "Only the workspace owner can remove an administrator"
+            );
+        }
+
+        memberRepository.delete(
+                targetMember
+        );
     }
 
     public List<WorkspaceMemberResponse> getWorkspaceMembers(
@@ -219,6 +269,7 @@ public class WorkspaceService {
 
         if (name.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.WORKSPACE_NAME_REQUIRED,
                     "Workspace name cannot be empty"
             );
         }
@@ -246,6 +297,7 @@ public class WorkspaceService {
                 currentMember.getRole()
         );
     }
+
     @Transactional
     public void deleteWorkspace(
             UUID workspaceId,

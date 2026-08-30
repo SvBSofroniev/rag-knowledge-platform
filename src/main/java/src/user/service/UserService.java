@@ -6,6 +6,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.auth.repository.UserRepository;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 import src.common.exception.ConflictException;
 import src.common.exception.ResourceNotFoundException;
@@ -22,7 +23,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class UserService {
 
-    private static final int SEARCH_LIMIT = 10;
+    private static final int SEARCH_LIMIT =
+            10;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -32,44 +34,57 @@ public class UserService {
             UpdateProfileRequest request,
             User currentUser
     ) {
-        User user = userRepository
-                .findById(currentUser.getId())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "User not found"
+        User user =
+                userRepository
+                        .findById(
+                                currentUser.getId()
                         )
-                );
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        ApiErrorCodes.USER_NOT_FOUND,
+                                        "User not found"
+                                )
+                        );
 
         String normalizedUsername =
-                request.username().trim();
+                request.username()
+                        .trim();
 
         String normalizedEmail =
                 request.email()
                         .trim()
-                        .toLowerCase(Locale.ROOT);
+                        .toLowerCase(
+                                Locale.ROOT
+                        );
 
         String normalizedFirstName =
-                request.firstName().trim();
+                request.firstName()
+                        .trim();
 
         String normalizedLastName =
-                request.lastName().trim();
+                request.lastName()
+                        .trim();
 
-        if (userRepository.existsByEmailAndIdNot(
-                normalizedEmail,
-                user.getId()
-        )) {
+        if (userRepository
+                .existsByEmailAndIdNot(
+                        normalizedEmail,
+                        user.getId()
+                )) {
+
             throw new ConflictException(
-                    "EMAIL_ALREADY_EXISTS",
+                    ApiErrorCodes.EMAIL_ALREADY_EXISTS,
                     "An account with this email already exists"
             );
         }
 
-        if (userRepository.existsByUsernameAndIdNot(
-                normalizedUsername,
-                user.getId()
-        )) {
+        if (userRepository
+                .existsByUsernameAndIdNot(
+                        normalizedUsername,
+                        user.getId()
+                )) {
+
             throw new ConflictException(
-                    "USERNAME_ALREADY_EXISTS",
+                    ApiErrorCodes.USERNAME_ALREADY_EXISTS,
                     "An account with this username already exists"
             );
         }
@@ -95,7 +110,9 @@ public class UserService {
         );
 
         User savedUser =
-                userRepository.save(user);
+                userRepository.save(
+                        user
+                );
 
         return toCurrentUserResponse(
                 savedUser
@@ -107,28 +124,35 @@ public class UserService {
             ChangePasswordRequest request,
             User currentUser
     ) {
-        User user = userRepository
-                .findById(currentUser.getId())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "User not found"
+        User user =
+                userRepository
+                        .findById(
+                                currentUser.getId()
                         )
-                );
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        ApiErrorCodes.USER_NOT_FOUND,
+                                        "User not found"
+                                )
+                        );
 
         if (!passwordEncoder.matches(
                 request.currentPassword(),
                 user.getPasswordHash()
         )) {
             throw new BadRequestException(
-                    "CURRENT_PASSWORD_INCORRECT",
+                    ApiErrorCodes.CURRENT_PASSWORD_INCORRECT,
                     "Current password is incorrect"
             );
         }
 
         if (!request.newPassword()
-                .equals(request.confirmNewPassword())) {
+                .equals(
+                        request.confirmNewPassword()
+                )) {
+
             throw new BadRequestException(
-                    "PASSWORDS_DO_NOT_MATCH",
+                    ApiErrorCodes.PASSWORDS_DO_NOT_MATCH,
                     "New passwords do not match"
             );
         }
@@ -138,7 +162,7 @@ public class UserService {
                 user.getPasswordHash()
         )) {
             throw new BadRequestException(
-                    "PASSWORD_MUST_BE_DIFFERENT",
+                    ApiErrorCodes.PASSWORD_MUST_BE_DIFFERENT,
                     "New password must be different from the current password"
             );
         }
@@ -149,7 +173,9 @@ public class UserService {
                 )
         );
 
-        userRepository.save(user);
+        userRepository.save(
+                user
+        );
     }
 
     public List<UserSearchResponse> searchUsers(
@@ -160,6 +186,7 @@ public class UserService {
                 query.trim().length() < 2) {
 
             throw new BadRequestException(
+                    ApiErrorCodes.USER_SEARCH_QUERY_TOO_SHORT,
                     "Search query must contain at least 2 characters"
             );
         }

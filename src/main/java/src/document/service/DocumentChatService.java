@@ -8,6 +8,7 @@ import src.chat.dto.CreateChatSessionRequest;
 import src.chat.repository.DocumentChatContextRepository;
 import src.chat.service.ChatDocumentContextService;
 import src.chat.service.ChatSessionService;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.ConflictException;
 import src.document.util.DocumentStatus;
 import src.entity.Document;
@@ -42,6 +43,7 @@ public class DocumentChatService {
 
         if (document.getStatus() != DocumentStatus.READY) {
             throw new ConflictException(
+                    ApiErrorCodes.DOCUMENT_NOT_READY,
                     "Only READY documents can be used to start a chat"
             );
         }

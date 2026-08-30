@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import src.common.exception.AiModelResponseException;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 import src.document.dto.DocumentChunkSearchResult;
 import src.document.repository.DocumentChunkRepository;
@@ -250,6 +251,7 @@ public class SemanticSearchService {
     ) {
         if (query == null || query.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.SEARCH_QUERY_REQUIRED,
                     "Search query cannot be empty"
             );
         }
@@ -258,6 +260,7 @@ public class SemanticSearchService {
 
         if (normalizedQuery.length() > MAX_QUERY_LENGTH) {
             throw new BadRequestException(
+                    ApiErrorCodes.SEARCH_QUERY_TOO_LONG,
                     "Search query cannot exceed " +
                             MAX_QUERY_LENGTH +
                             " characters"
@@ -276,12 +279,14 @@ public class SemanticSearchService {
 
         if (limit < 1) {
             throw new BadRequestException(
+                    ApiErrorCodes.SEARCH_LIMIT_INVALID,
                     "Search result limit must be at least 1"
             );
         }
 
         if (limit > MAX_LIMIT) {
             throw new BadRequestException(
+                    ApiErrorCodes.SEARCH_LIMIT_INVALID,
                     "Search result limit cannot exceed " +
                             MAX_LIMIT
             );
@@ -295,6 +300,7 @@ public class SemanticSearchService {
     ) {
         if (documentIds == null || documentIds.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_SELECTION_REQUIRED,
                     "At least one document must be provided"
             );
         }
@@ -307,6 +313,7 @@ public class SemanticSearchService {
 
         if (uniqueDocumentIds.isEmpty()) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_SELECTION_REQUIRED,
                     "At least one valid document must be provided"
             );
         }

@@ -2,10 +2,7 @@ package src.rag.service;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
-import src.common.exception.AiModelResponseException;
-import src.common.exception.AiServiceUnavailableException;
-import src.common.exception.ApiException;
-import src.common.exception.BadRequestException;
+import src.common.exception.*;
 import src.entity.User;
 import src.rag.dto.ConversationMessage;
 import src.rag.dto.RagAnswerResponse;
@@ -1082,6 +1079,7 @@ public class RagService {
         if (question == null ||
                 question.isBlank()) {
             throw new BadRequestException(
+                    ApiErrorCodes.QUESTION_REQUIRED,
                     "Question cannot be empty"
             );
         }
@@ -1089,6 +1087,7 @@ public class RagService {
         if (question.length() >
                 MAX_QUESTION_LENGTH) {
             throw new BadRequestException(
+                    ApiErrorCodes.QUESTION_TOO_LONG,
                     "Question cannot exceed " +
                             MAX_QUESTION_LENGTH +
                             " characters"

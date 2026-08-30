@@ -3,6 +3,7 @@ package src.document.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.ResourceNotFoundException;
 import src.document.dto.DocumentResponse;
 import src.document.repository.DocumentRepository;
@@ -34,7 +35,10 @@ public class DocumentUploadService {
 
         Document updated = documentRepository.findById(created.id())
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Document not found")
+                        new ResourceNotFoundException(
+                                ApiErrorCodes.DOCUMENT_NOT_FOUND,
+                                "Document not found"
+                        )
                 );
 
         return documentService.toResponse(updated);

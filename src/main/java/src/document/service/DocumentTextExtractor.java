@@ -6,6 +6,7 @@ import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
 import org.springframework.stereotype.Service;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.BadRequestException;
 import src.common.exception.DocumentProcessingException;
 import src.entity.Document;
@@ -244,6 +245,7 @@ public class DocumentTextExtractor {
     ) {
         if (document == null) {
             throw new BadRequestException(
+                    ApiErrorCodes.DOCUMENT_REQUIRED,
                     "Document cannot be null"
             );
         }

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.chat.dto.AttachedDocumentResponse;
 import src.chat.repository.DocumentChatContextRepository;
+import src.common.exception.ApiErrorCodes;
 import src.common.exception.ConflictException;
 import src.common.exception.ResourceNotFoundException;
 import src.document.repository.DocumentRepository;
@@ -46,6 +47,7 @@ public class ChatDocumentContextService {
 
         if (document.getStatus() != DocumentStatus.READY) {
             throw new ConflictException(
+                    ApiErrorCodes.DOCUMENT_NOT_READY,
                     "Only READY documents can be attached to a chat session"
             );
         }
@@ -58,6 +60,7 @@ public class ChatDocumentContextService {
 
         if (alreadyAttached) {
             throw new ConflictException(
+                    ApiErrorCodes.DOCUMENT_ALREADY_ATTACHED,
                     "Document is already attached to this chat session"
             );
         }
@@ -119,6 +122,7 @@ public class ChatDocumentContextService {
                         )
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
+                                        ApiErrorCodes.DOCUMENT_NOT_ATTACHED,
                                         "Document is not attached to this chat session"
                                 )
                         );
@@ -128,13 +132,25 @@ public class ChatDocumentContextService {
 
     @Transactional(readOnly = true)
     public List<UUID> getAttachedDocumentIds(
-            ChatSession session
+            UUID sessionId,
+            User currentUser
     ) {
+        ChatSession session =
+                chatSessionService
+                        .getAccessibleSession(
+                                sessionId,
+                                currentUser
+                        );
+
         return contextRepository
-                .findByChatSessionOrderByAttachedAtAsc(session)
+                .findByChatSessionOrderByAttachedAtAsc(
+                        session
+                )
                 .stream()
                 .map(context ->
-                        context.getDocument().getId()
+                        context
+                                .getDocument()
+                                .getId()
                 )
                 .toList();
     }
@@ -146,6 +162,7 @@ public class ChatDocumentContextService {
                 .findById(documentId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
+                                ApiErrorCodes.DOCUMENT_NOT_FOUND,
                                 "Document not found"
                         )
                 );
@@ -167,7 +184,8 @@ public class ChatDocumentContextService {
              * document exists in another workspace.
              */
             throw new ResourceNotFoundException(
-                    "Document not found in the chat session workspace"
+                    ApiErrorCodes.DOCUMENT_NOT_ATTACHED,
+                    "Document is not attached to this chat session"
             );
         }
     }

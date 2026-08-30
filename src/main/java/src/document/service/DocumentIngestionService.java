@@ -3,10 +3,7 @@ package src.document.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import src.common.exception.ResourceNotFoundException;
 import src.document.dto.DocumentResponse;
-import src.document.repository.DocumentRepository;
-import src.entity.Document;
 import src.entity.User;
 
 import java.util.UUID;
@@ -16,8 +13,9 @@ import java.util.UUID;
 public class DocumentIngestionService {
 
     private final DocumentService documentService;
-    private final DocumentProcessingService documentProcessingService;
-    private final DocumentRepository documentRepository;
+
+    private final DocumentProcessingService
+            documentProcessingService;
 
     public DocumentResponse ingest(
             UUID workspaceId,
@@ -35,12 +33,9 @@ public class DocumentIngestionService {
                 createdDocument.id()
         );
 
-        Document processedDocument = documentRepository
-                .findById(createdDocument.id())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Document not found")
-                );
-
-        return documentService.toResponse(processedDocument);
+        return documentService.getDocument(
+                createdDocument.id(),
+                currentUser
+        );
     }
 }
