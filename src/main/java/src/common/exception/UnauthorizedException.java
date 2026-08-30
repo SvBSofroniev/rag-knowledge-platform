@@ -4,10 +4,22 @@ import org.springframework.http.HttpStatus;
 
 public class UnauthorizedException extends ApiException {
 
-    public UnauthorizedException(String message) {
+    public UnauthorizedException(
+            String message
+    ) {
+        this(
+                "UNAUTHORIZED",
+                message
+        );
+    }
+
+    public UnauthorizedException(
+            String code,
+            String message
+    ) {
         super(
                 HttpStatus.UNAUTHORIZED,
-                "UNAUTHORIZED",
+                code,
                 message
         );
     }
@@ -16,9 +28,21 @@ public class UnauthorizedException extends ApiException {
             String message,
             Throwable cause
     ) {
+        this(
+                "UNAUTHORIZED",
+                message,
+                cause
+        );
+    }
+
+    public UnauthorizedException(
+            String code,
+            String message,
+            Throwable cause
+    ) {
         super(
                 HttpStatus.UNAUTHORIZED,
-                "UNAUTHORIZED",
+                code,
                 message
         );
 

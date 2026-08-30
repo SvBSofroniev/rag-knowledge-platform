@@ -146,4 +146,13 @@ public class ChatSessionController {
                 currentUser
         );
     }
+
+    @GetMapping("/chat-sessions")
+    public List<ChatSessionResponse> getAllMySessions(
+            @AuthenticationPrincipal User currentUser
+    ) {
+        return chatSessionService.getAllMySessions(
+                currentUser
+        );
+    }
 }

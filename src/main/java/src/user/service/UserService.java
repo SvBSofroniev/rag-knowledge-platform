@@ -2,6 +2,7 @@ package src.user.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import src.auth.repository.UserRepository;
@@ -9,6 +10,7 @@ import src.common.exception.BadRequestException;
 import src.common.exception.ConflictException;
 import src.common.exception.ResourceNotFoundException;
 import src.entity.User;
+import src.user.dto.ChangePasswordRequest;
 import src.user.dto.CurrentUserResponse;
 import src.user.dto.UpdateProfileRequest;
 import src.user.dto.UserSearchResponse;
@@ -23,6 +25,7 @@ public class UserService {
     private static final int SEARCH_LIMIT = 10;
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public CurrentUserResponse updateProfile(
@@ -56,6 +59,7 @@ public class UserService {
                 user.getId()
         )) {
             throw new ConflictException(
+                    "EMAIL_ALREADY_EXISTS",
                     "An account with this email already exists"
             );
         }
@@ -65,6 +69,7 @@ public class UserService {
                 user.getId()
         )) {
             throw new ConflictException(
+                    "USERNAME_ALREADY_EXISTS",
                     "An account with this username already exists"
             );
         }
@@ -95,6 +100,56 @@ public class UserService {
         return toCurrentUserResponse(
                 savedUser
         );
+    }
+
+    @Transactional
+    public void changePassword(
+            ChangePasswordRequest request,
+            User currentUser
+    ) {
+        User user = userRepository
+                .findById(currentUser.getId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"
+                        )
+                );
+
+        if (!passwordEncoder.matches(
+                request.currentPassword(),
+                user.getPasswordHash()
+        )) {
+            throw new BadRequestException(
+                    "CURRENT_PASSWORD_INCORRECT",
+                    "Current password is incorrect"
+            );
+        }
+
+        if (!request.newPassword()
+                .equals(request.confirmNewPassword())) {
+            throw new BadRequestException(
+                    "PASSWORDS_DO_NOT_MATCH",
+                    "New passwords do not match"
+            );
+        }
+
+        if (passwordEncoder.matches(
+                request.newPassword(),
+                user.getPasswordHash()
+        )) {
+            throw new BadRequestException(
+                    "PASSWORD_MUST_BE_DIFFERENT",
+                    "New password must be different from the current password"
+            );
+        }
+
+        user.setPasswordHash(
+                passwordEncoder.encode(
+                        request.newPassword()
+                )
+        );
+
+        userRepository.save(user);
     }
 
     public List<UserSearchResponse> searchUsers(

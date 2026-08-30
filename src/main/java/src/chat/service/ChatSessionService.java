@@ -84,6 +84,19 @@ public class ChatSessionService {
     }
 
     @Transactional(readOnly = true)
+    public List<ChatSessionResponse> getAllMySessions(
+            User currentUser
+    ) {
+        return chatSessionRepository
+                .findAllAccessibleByUser(
+                        currentUser
+                )
+                .stream()
+                .map(this::toSessionResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public ChatSessionResponse getSession(
             UUID sessionId,
             User currentUser

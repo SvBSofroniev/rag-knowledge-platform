@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import src.chat.dto.ChatSessionResponse;
 import src.document.dto.DocumentResponse;
+import src.document.dto.GlobalDocumentResponse;
 import src.document.service.DocumentChatService;
 import src.document.service.DocumentIngestionService;
 import src.document.service.DocumentService;
@@ -227,5 +228,17 @@ public class DocumentController {
                         documentId,
                         currentUser
                 );
+    }
+
+    @GetMapping("/documents")
+    public ResponseEntity<List<GlobalDocumentResponse>>
+    getAccessibleDocuments(
+            @AuthenticationPrincipal User currentUser
+    ) {
+        return ResponseEntity.ok(
+                documentService.getAccessibleDocuments(
+                        currentUser
+                )
+        );
     }
 }

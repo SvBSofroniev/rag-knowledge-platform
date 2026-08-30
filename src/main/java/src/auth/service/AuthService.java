@@ -46,12 +46,14 @@ public class AuthService {
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ConflictException(
+                    "EMAIL_ALREADY_EXISTS",
                     "An account with this email already exists"
             );
         }
 
         if (userRepository.existsByUsername(normalizedUsername)) {
             throw new ConflictException(
+                    "USERNAME_ALREADY_EXISTS",
                     "An account with this username already exists"
             );
         }
@@ -121,6 +123,7 @@ public class AuthService {
                         .findByEmail(normalizedEmail)
                         .orElseThrow(() ->
                                 new UnauthorizedException(
+                                        "INVALID_CREDENTIALS",
                                         "Invalid email or password"
                                 )
                         );
@@ -130,18 +133,21 @@ public class AuthService {
                 user.getPasswordHash()
         )) {
             throw new UnauthorizedException(
+                    "INVALID_CREDENTIALS",
                     "Invalid email or password"
             );
         }
 
         if (!user.isEnabled()) {
             throw new UnauthorizedException(
+                    "ACCOUNT_DISABLED",
                     "Account is disabled"
             );
         }
 
         if (!user.isAccountNonLocked()) {
             throw new UnauthorizedException(
+                    "ACCOUNT_LOCKED",
                     "Account is locked"
             );
         }

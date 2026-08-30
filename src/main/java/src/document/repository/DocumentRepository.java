@@ -1,8 +1,11 @@
 package src.document.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import src.entity.Document;
+import src.entity.User;
 import src.entity.Workspace;
 import src.document.util.DocumentStatus;
 
@@ -33,5 +36,16 @@ public interface DocumentRepository
     List<Document>
     findTop5ByWorkspaceInOrderByCreatedAtDesc(
             List<Workspace> workspaces
+    );
+
+    @Query("""
+        SELECT d
+        FROM Document d
+        JOIN d.workspace.members wm
+        WHERE wm.user = :user
+        ORDER BY d.createdAt DESC
+        """)
+    List<Document> findAllAccessibleByUser(
+            @Param("user") User user
     );
 }

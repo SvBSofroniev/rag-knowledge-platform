@@ -8,6 +8,7 @@ import src.common.exception.BadRequestException;
 import src.common.exception.ForbiddenOperationException;
 import src.common.exception.ResourceNotFoundException;
 import src.document.dto.DocumentResponse;
+import src.document.dto.GlobalDocumentResponse;
 import src.document.repository.DocumentRepository;
 import src.document.util.DocumentStatus;
 import src.entity.Document;
@@ -415,6 +416,42 @@ public class DocumentService {
         }
 
         return currentContent;
+    }
+
+    public List<GlobalDocumentResponse> getAccessibleDocuments(
+            User currentUser
+    ) {
+        return documentRepository
+                .findAllAccessibleByUser(currentUser)
+                .stream()
+                .map(this::toGlobalDocumentResponse)
+                .toList();
+    }
+
+    private GlobalDocumentResponse toGlobalDocumentResponse(
+            Document document
+    ) {
+        User uploadedBy =
+                document.getUploadedBy();
+
+        return new GlobalDocumentResponse(
+                document.getId(),
+                document.getWorkspace().getId(),
+                document.getWorkspace().getName(),
+                document.getTitle(),
+                document.getOriginalFilename(),
+                document.getFileType(),
+                document.getFileSize(),
+                document.getStatus(),
+                uploadedBy == null
+                        ? null
+                        : uploadedBy.getId(),
+                uploadedBy == null
+                        ? null
+                        : uploadedBy.getUsername(),
+                document.getCreatedAt(),
+                document.getUpdatedAt()
+        );
     }
     private String resolveContentType(
             Document document,

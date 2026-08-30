@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import src.entity.User;
+import src.user.dto.ChangePasswordRequest;
 import src.user.dto.CurrentUserResponse;
 import src.user.dto.UpdateProfileRequest;
 import src.user.dto.UserSearchResponse;
@@ -52,6 +53,17 @@ public class UserController {
     ) {
         return userService.searchUsers(
                 query,
+                currentUser
+        );
+    }
+
+    @PatchMapping("/me/password")
+    public void changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        userService.changePassword(
+                request,
                 currentUser
         );
     }

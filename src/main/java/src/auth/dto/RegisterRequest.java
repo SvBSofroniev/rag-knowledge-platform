@@ -7,46 +7,62 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+import static src.common.validation.ValidationErrorCodes.*;
+
 public record RegisterRequest(
 
-        @NotBlank(message = "Username is required")
+        @NotBlank(
+                message = USERNAME_REQUIRED
+        )
         @Size(
                 min = 3,
                 max = 50,
-                message = "Username must be between 3 and 50 characters"
+                message = USERNAME_LENGTH
         )
         String username,
 
-        @NotBlank(message = "First name is required")
+        @NotBlank(
+                message = FIRST_NAME_REQUIRED
+        )
         @Size(
                 max = 100,
-                message = "First name cannot exceed 100 characters"
+                message = FIRST_NAME_LENGTH
         )
         String firstName,
 
-        @NotBlank(message = "Last name is required")
+        @NotBlank(
+                message = LAST_NAME_REQUIRED
+        )
         @Size(
                 max = 100,
-                message = "Last name cannot exceed 100 characters"
+                message = LAST_NAME_LENGTH
         )
         String lastName,
 
-        @NotBlank(message = "Email is required")
-        @Email(message = "Email address is invalid")
+        @NotBlank(
+                message = EMAIL_REQUIRED
+        )
+        @Email(
+                message = EMAIL_INVALID
+        )
         @Size(
                 max = 255,
-                message = "Email cannot exceed 255 characters"
+                message = EMAIL_LENGTH
         )
         String email,
 
-        @Past(message = "Date of birth must be in the past")
+        @Past(
+                message = DATE_OF_BIRTH_PAST
+        )
         LocalDate dateOfBirth,
 
-        @NotBlank(message = "Password is required")
+        @NotBlank(
+                message = PASSWORD_REQUIRED
+        )
         @Size(
                 min = 8,
                 max = 100,
-                message = "Password must be between 8 and 100 characters"
+                message = PASSWORD_LENGTH
         )
         String password
 ) {
