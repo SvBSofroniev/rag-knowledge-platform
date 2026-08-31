@@ -1,6 +1,9 @@
 package src.document.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
@@ -24,12 +27,12 @@ import java.util.Set;
 public class DocumentTextExtractor {
 
     /*
-     * Some scanned PDFs contain a tiny amount of metadata or
-     * scanner-generated text even though the actual page contents
-     * are images.
+     * Some PDFs may contain a very small amount of metadata,
+     * page numbers, scanner text, or other insignificant text
+     * even though the actual page content is image-based.
      *
-     * Requiring a small amount of meaningful text allows those
-     * documents to fall back to OCR.
+     * Requiring a minimum amount of meaningful letters/digits
+     * allows those PDFs to fall back to OCR.
      */
     private static final int MIN_PDF_TEXT_CHARACTERS = 40;
 
@@ -75,68 +78,183 @@ public class DocumentTextExtractor {
                         document.getOriginalFilename()
                 );
 
+        /*
+         * PDFs are intentionally handled separately.
+         *
+         * We do NOT use Tika first for PDFs because Tika may
+         * invoke its own OCR integration. That would bypass
+         * the OCR configuration managed by OcrService.
+         *
+         * Instead:
+         *
+         * PDFBox -> native PDF text layer
+         *
+         * If no meaningful native text exists:
+         *
+         * OcrService -> configured Tesseract OCR
+         */
+        if ("pdf".equals(extension)) {
+            return extractPdf(
+                    document,
+                    path
+            );
+        }
+
+        /*
+         * DOCX / TXT / MD / MARKDOWN
+         *
+         * These formats continue to use Tika because they
+         * normally contain an actual machine-readable
+         * text layer and do not need the PDF OCR fallback.
+         */
         String tikaText =
                 extractWithTika(
                         document,
                         path
                 );
 
+        if (!hasAnyText(
+                tikaText
+        )) {
+            throw new DocumentProcessingException(
+                    "Document contains no extractable text"
+            );
+        }
+
+        return tikaText.trim();
+    }
+
+    private String extractPdf(
+            Document document,
+            Path path
+    ) {
         /*
-         * Non-PDF files don't currently have an OCR fallback.
+         * First inspect only the PDF's native text layer.
          */
-        if (!"pdf".equals(extension)) {
-            if (!hasAnyText(
-                    tikaText
-            )) {
+        String nativeText =
+                extractNativePdfText(
+                        document,
+                        path
+                );
+
+        /*
+         * Normal text-based PDF.
+         */
+        if (hasMeaningfulPdfText(
+                nativeText
+        )) {
+            log.info(
+                    "PDF native text layer detected: file={}, characters={}",
+                    document.getOriginalFilename(),
+                    nativeText.length()
+            );
+
+            return nativeText.trim();
+        }
+
+        /*
+         * No meaningful embedded text exists.
+         *
+         * This is where scanned PDFs should reach our
+         * configured OCR pipeline.
+         */
+        if (!ocrService.isEnabled()) {
+            throw new DocumentProcessingException(
+                    "Document contains no meaningful text layer and OCR is disabled"
+            );
+        }
+
+        log.info(
+                "PDF contains no meaningful native text layer. Starting OCR fallback: file={}",
+                document.getOriginalFilename()
+        );
+
+        String ocrText =
+                ocrService.extractPdf(
+                        path
+                );
+
+        if (!hasAnyText(
+                ocrText
+        )) {
+            throw new DocumentProcessingException(
+                    "OCR produced no usable text"
+            );
+        }
+
+        log.info(
+                "PDF OCR extraction completed: file={}, characters={}",
+                document.getOriginalFilename(),
+                ocrText.length()
+        );
+
+        return ocrText.trim();
+    }
+
+    private String extractNativePdfText(
+            Document document,
+            Path path
+    ) {
+        try (PDDocument pdfDocument =
+                     Loader.loadPDF(
+                             path.toFile()
+                     )) {
+
+            if (pdfDocument.getNumberOfPages() == 0) {
                 throw new DocumentProcessingException(
-                        "Document contains no extractable text"
+                        "PDF contains no pages"
                 );
             }
 
-            return tikaText.trim();
-        }
+            PDFTextStripper textStripper =
+                    new PDFTextStripper();
 
-        /*
-         * Normal PDF with a real text layer.
-         */
-        if (hasMeaningfulPdfText(
-                tikaText
-        )) {
-            log.debug(
-                    "PDF text extracted normally using Tika: file={}, characters={}",
-                    document.getOriginalFilename(),
-                    tikaText.length()
-            );
-
-            return tikaText.trim();
-        }
-
-        /*
-         * PDF has no useful text layer.
-         *
-         * Fall back to OCR.
-         */
-        if (ocrService.isEnabled()) {
-            log.info(
-                    "PDF contains no meaningful text layer. Starting OCR fallback: file={}",
-                    document.getOriginalFilename()
-            );
-
-            String ocrText =
-                    ocrService.extractPdf(
-                            path
+            String extractedText =
+                    textStripper.getText(
+                            pdfDocument
                     );
 
-            if (hasAnyText(
-                    ocrText
-            )) {
-                return ocrText.trim();
+            if (extractedText == null) {
+                return "";
             }
-        }
 
-        throw new DocumentProcessingException(
-                "Document contains no extractable text"
-        );
+            String result =
+                    extractedText.trim();
+
+            log.debug(
+                    "PDFBox native extraction completed: file={}, characters={}",
+                    document.getOriginalFilename(),
+                    result.length()
+            );
+
+            return result;
+
+        } catch (DocumentProcessingException exception) {
+            throw exception;
+
+        } catch (IOException exception) {
+
+            /*
+             * If native PDF extraction fails but OCR is
+             * enabled, allow the OCR pipeline to attempt
+             * recovery from the rendered pages.
+             */
+            if (ocrService.isEnabled()) {
+                log.warn(
+                        "Native PDF text extraction failed. OCR fallback will be attempted: file={}",
+                        document.getOriginalFilename(),
+                        exception
+                );
+
+                return "";
+            }
+
+            throw new DocumentProcessingException(
+                    "Could not extract text from PDF: " +
+                            document.getOriginalFilename(),
+                    exception
+            );
+        }
     }
 
     private String extractWithTika(
@@ -167,24 +285,6 @@ public class DocumentTextExtractor {
                     : extractedText.trim();
 
         } catch (TikaException exception) {
-            /*
-             * If Tika cannot parse a PDF at all, OCR may still
-             * be able to recover its visible page content.
-             */
-            if (isPdf(
-                    document.getOriginalFilename()
-            ) &&
-                    ocrService.isEnabled()) {
-
-                log.warn(
-                        "Tika extraction failed for PDF. OCR fallback will be attempted: file={}",
-                        document.getOriginalFilename(),
-                        exception
-                );
-
-                return "";
-            }
-
             throw new DocumentProcessingException(
                     "Text extraction failed for document: " +
                             document.getOriginalFilename(),
@@ -211,33 +311,25 @@ public class DocumentTextExtractor {
     ) {
         if (text == null ||
                 text.isBlank()) {
+
             return false;
         }
 
         /*
-         * Count actual letters/digits instead of spaces and
-         * punctuation.
+         * Ignore whitespace and punctuation.
+         *
+         * What matters here is whether the PDF contains a
+         * meaningful number of actual letters or digits.
          */
         long meaningfulCharacters =
                 text.chars()
-                        .filter(Character::isLetterOrDigit
+                        .filter(
+                                Character::isLetterOrDigit
                         )
                         .count();
 
         return meaningfulCharacters >=
                 MIN_PDF_TEXT_CHARACTERS;
-    }
-
-    private boolean isPdf(
-            String filename
-    ) {
-        if (filename == null) {
-            return false;
-        }
-
-        return filename
-                .toLowerCase(Locale.ROOT)
-                .endsWith(".pdf");
     }
 
     private void validateDocument(

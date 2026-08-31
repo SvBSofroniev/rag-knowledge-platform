@@ -36,7 +36,7 @@ public class OcrService {
             @Value("${ourvault.ocr.tesseract-path}")
             String tesseractPath,
 
-            @Value("${ourvault.ocr.languages:eng}")
+            @Value("${ourvault.ocr.languages:bul+eng}")
             String languages,
 
             @Value("${ourvault.ocr.dpi:300}")
@@ -246,7 +246,7 @@ public class OcrService {
                         "-l",
                         languages,
                         "--psm",
-                        "3"
+                        "6"
                 );
 
         /*

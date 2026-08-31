@@ -13,9 +13,7 @@ import java.util.UUID;
 public class DocumentIngestionService {
 
     private final DocumentService documentService;
-
-    private final DocumentProcessingService
-            documentProcessingService;
+    private final DocumentProcessingService documentProcessingService;
 
     public DocumentResponse ingest(
             UUID workspaceId,

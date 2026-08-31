@@ -78,7 +78,11 @@ public class DocumentService {
                     resolveFileType(
                             originalFilename
                     )
-            );            document.setFileSize(file.getSize());
+            );
+
+            document.setFileSize(
+                    file.getSize()
+            );
             document.setStoragePath(storedFile.filePath());
             document.setStatus(DocumentStatus.PENDING);
             document.setProcessingError(null);
