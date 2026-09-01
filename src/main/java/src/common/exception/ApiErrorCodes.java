@@ -232,4 +232,13 @@ public final class ApiErrorCodes {
 
     public static final String INVALID_FILE_STORAGE_PATH =
             "INVALID_FILE_STORAGE_PATH";
+
+    public static final String EMAIL_DELIVERY_FAILED =
+            "EMAIL_DELIVERY_FAILED";
+
+    public static final String PASSWORD_RESET_TOKEN_INVALID =
+            "PASSWORD_RESET_TOKEN_INVALID";
+
+    public static final String PASSWORD_RESET_TOKEN_EXPIRED =
+            "PASSWORD_RESET_TOKEN_EXPIRED";
 }
