@@ -228,4 +228,22 @@ public class RefreshTokenService {
             );
         }
     }
+
+    @Transactional
+    public void revokeAllRefreshTokens(
+            User user
+    ) {
+        if (user == null ||
+                user.getId() == null) {
+
+            throw new IllegalArgumentException(
+                    "User is required"
+            );
+        }
+
+        refreshTokenRepository
+                .revokeAllByUserId(
+                        user.getId()
+                );
+    }
 }

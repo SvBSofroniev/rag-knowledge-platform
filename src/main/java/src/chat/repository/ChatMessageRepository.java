@@ -5,6 +5,7 @@ import src.entity.ChatMessage;
 import src.entity.ChatSession;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ChatMessageRepository
@@ -15,6 +16,11 @@ public interface ChatMessageRepository
     );
 
     List<ChatMessage> findTop10BySessionOrderByCreatedAtDesc(
+            ChatSession session
+    );
+
+    Optional<ChatMessage> findByIdAndSession(
+            UUID messageId,
             ChatSession session
     );
 }

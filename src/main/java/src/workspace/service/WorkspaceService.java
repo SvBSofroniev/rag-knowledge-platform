@@ -50,15 +50,22 @@ public class WorkspaceService {
         );
     }
 
-    public List<WorkspaceResponse> getMyWorkspaces(User currentUser) {
-        return memberRepository.findByUser(currentUser)
+    public List<WorkspaceResponse> getMyWorkspaces(
+            User currentUser
+    ) {
+        return memberRepository
+                .findByUser(
+                        currentUser
+                )
                 .stream()
-                .map(member -> new WorkspaceResponse(
-                        member.getWorkspace().getId(),
-                        member.getWorkspace().getName(),
-                        member.getWorkspace().getDescription(),
-                        member.getRole()
-                ))
+                .map(member ->
+                        new WorkspaceResponse(
+                                member.getWorkspace().getId(),
+                                member.getWorkspace().getName(),
+                                member.getWorkspace().getDescription(),
+                                member.getRole()
+                        )
+                )
                 .toList();
     }
 

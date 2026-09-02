@@ -41,6 +41,8 @@ public class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
 
     private final MailService mailService;
+    private final RefreshTokenService
+            refreshTokenService;
 
     @Value("${ourvault.frontend.base-url}")
     private String frontendBaseUrl;
@@ -107,9 +109,10 @@ public class PasswordResetService {
         LocalDateTime now =
                 LocalDateTime.now();
 
-        if (resetToken
-                .getExpiresAt()
-                .isBefore(now)) {
+        if (resetToken.getExpiresAt() == null ||
+                !resetToken
+                        .getExpiresAt()
+                        .isAfter(now)) {
 
             throw new BadRequestException(
                     ApiErrorCodes.PASSWORD_RESET_TOKEN_EXPIRED,
@@ -120,12 +123,23 @@ public class PasswordResetService {
         User user =
                 resetToken.getUser();
 
+        if (user == null) {
+            throw invalidToken();
+        }
+
+        /*
+         * Update password.
+         */
         user.setPasswordHash(
                 passwordEncoder.encode(
                         newPassword
                 )
         );
 
+        /*
+         * Prevent this reset link
+         * from being used again.
+         */
         resetToken.setUsedAt(
                 now
         );
@@ -138,8 +152,20 @@ public class PasswordResetService {
                 resetToken
         );
 
+        /*
+         * Password reset is a security-sensitive operation.
+         *
+         * Invalidate every existing refresh token so that
+         * previously authenticated sessions cannot obtain
+         * new access tokens.
+         */
+        refreshTokenService
+                .revokeAllRefreshTokens(
+                        user
+                );
+
         log.info(
-                "Password reset completed for user {}",
+                "Password reset completed for user {}. Existing refresh tokens revoked.",
                 user.getId()
         );
     }

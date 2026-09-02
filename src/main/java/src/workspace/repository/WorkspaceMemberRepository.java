@@ -11,15 +11,28 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, UUID> {
+public interface WorkspaceMemberRepository
+        extends JpaRepository<WorkspaceMember, UUID> {
 
-    boolean existsByWorkspaceAndUser(Workspace workspace, User user);
+    boolean existsByWorkspaceAndUser(
+            Workspace workspace,
+            User user
+    );
 
-    Optional<WorkspaceMember> findByWorkspaceAndUser(Workspace workspace, User user);
+    Optional<WorkspaceMember> findByWorkspaceAndUser(
+            Workspace workspace,
+            User user
+    );
 
-    List<WorkspaceMember> findByUser(User user);
+    List<WorkspaceMember> findByUser(
+            User user
+    );
 
-    List<WorkspaceMember> findByWorkspace(Workspace workspace);
+    List<WorkspaceMember> findByWorkspace(
+            Workspace workspace
+    );
 
-    long countByWorkspace(Workspace workspace);
+    long countByWorkspace(
+            Workspace workspace
+    );
 }

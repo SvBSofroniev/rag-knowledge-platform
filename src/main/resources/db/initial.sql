@@ -371,3 +371,27 @@ CREATE INDEX idx_password_reset_tokens_user
 
 CREATE INDEX idx_password_reset_tokens_expires_at
     ON password_reset_tokens(expires_at);
+
+ CREATE TABLE workspace_messages (
+     id UUID PRIMARY KEY,
+     workspace_id UUID NOT NULL,
+     user_id UUID NOT NULL,
+     content TEXT NOT NULL,
+     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+     CONSTRAINT fk_workspace_messages_workspace
+         FOREIGN KEY (workspace_id)
+         REFERENCES workspaces(id)
+         ON DELETE CASCADE,
+
+     CONSTRAINT fk_workspace_messages_user
+         FOREIGN KEY (user_id)
+         REFERENCES users(id)
+         ON DELETE CASCADE
+ );
+
+ CREATE INDEX idx_workspace_messages_workspace_created
+     ON workspace_messages (
+         workspace_id,
+         created_at
+     );

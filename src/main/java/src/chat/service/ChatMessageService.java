@@ -166,13 +166,6 @@ public class ChatMessageService {
         String message = request.message();
 
         if (message == null || message.isBlank()) {
-            throw new BadRequestException(
-                    ApiErrorCodes.CHAT_MESSAGE_REQUIRED,
-                    "Message cannot be empty"
-            );
-        }
-
-        if (message == null || message.isBlank()) {
 
             throw new BadRequestException(
                     ApiErrorCodes.CHAT_MESSAGE_REQUIRED,

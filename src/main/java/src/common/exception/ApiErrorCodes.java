@@ -241,4 +241,16 @@ public final class ApiErrorCodes {
 
     public static final String PASSWORD_RESET_TOKEN_EXPIRED =
             "PASSWORD_RESET_TOKEN_EXPIRED";
+
+    public static final String CHAT_MESSAGE_NOT_FOUND =
+            "CHAT_MESSAGE_NOT_FOUND";
+
+    public static final String CHAT_MESSAGE_EMAIL_REQUIRES_ASSISTANT =
+            "CHAT_MESSAGE_EMAIL_REQUIRES_ASSISTANT";
+
+    public static final String WORKSPACE_MESSAGE_REQUIRED =
+            "WORKSPACE_MESSAGE_REQUIRED";
+
+    public static final String WORKSPACE_MESSAGE_TOO_LONG =
+            "WORKSPACE_MESSAGE_TOO_LONG";
 }
