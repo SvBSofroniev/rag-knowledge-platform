@@ -3,6 +3,7 @@ package src.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import src.rag.model.RetrievalStrategy;
 import src.util.SenderType;
 
 import java.time.LocalDateTime;
@@ -56,4 +57,11 @@ public class ChatMessage {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
+    @Enumerated(EnumType.STRING)
+    @Column(
+            name = "retrieval_strategy",
+            length = 50
+    )
+    private RetrievalStrategy retrievalStrategy;
 }

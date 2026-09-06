@@ -2,59 +2,99 @@ package src.rag.service;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
-import src.common.exception.*;
+import src.common.exception.AiModelResponseException;
+import src.common.exception.AiServiceUnavailableException;
+import src.common.exception.ApiErrorCodes;
+import src.common.exception.ApiException;
+import src.common.exception.BadRequestException;
+import src.common.language.ResponseLanguage;
+import src.common.service.ResponseLanguageService;
 import src.entity.User;
 import src.rag.dto.ConversationMessage;
 import src.rag.dto.RagAnswerResponse;
+import src.rag.dto.RagExplanationResponse;
 import src.rag.dto.SemanticSearchResponse;
+import src.rag.model.RetrievalStrategy;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 public class RagService {
 
-    private static final int DEFAULT_RESULT_LIMIT = 5;
+    private static final int DEFAULT_RESULT_LIMIT =
+            5;
 
-    private static final int ATTACHED_DOCUMENT_RESULT_LIMIT = 10;
+    private static final int ATTACHED_DOCUMENT_RESULT_LIMIT =
+            10;
 
     /*
      * For small explicitly attached document sets, providing the
      * complete context is both affordable and more reliable than
      * semantic retrieval alone.
-     *
-     * This helps multi-part questions where the requested facts may
-     * appear in different chunks with different similarity scores.
      */
     private static final int
-            MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS = 10;
+            MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS =
+            10;
+
     /*
      * Broad questions use the complete attached-document context
      * when the selected documents are reasonably small.
      */
-    private static final int MAX_FULL_DOCUMENT_CONTEXT_CHUNKS = 30;
+    private static final int
+            MAX_FULL_DOCUMENT_CONTEXT_CHUNKS =
+            30;
 
     /*
      * If the selected documents are too large for full context,
      * broad semantic retrieval stays bounded.
      */
-    private static final int BROAD_RESULT_LIMIT = 12;
+    private static final int BROAD_RESULT_LIMIT =
+            12;
 
-    private static final int MAX_QUESTION_LENGTH = 5_000;
-    private static final int MAX_HISTORY_MESSAGES = 10;
-    private static final int MAX_HISTORY_CHARACTERS = 4_000;
+    private static final int MAX_QUESTION_LENGTH =
+            5_000;
 
-    private static final String NO_RELEVANT_INFORMATION_MESSAGE =
-            "I could not find relevant information in the workspace documents.";
+    private static final int MAX_HISTORY_MESSAGES =
+            10;
 
-    private final SemanticSearchService semanticSearchService;
-    private final ChatClient chatClient;
+    private static final int MAX_HISTORY_CHARACTERS =
+            4_000;
+
+    private final SemanticSearchService
+            semanticSearchService;
+
+    private final RagExplanationService
+            ragExplanationService;
+
+    private final ResponseLanguageService
+            responseLanguageService;
+
+    private final ChatClient
+            chatClient;
 
     public RagService(
             SemanticSearchService semanticSearchService,
+            RagExplanationService ragExplanationService,
+            ResponseLanguageService responseLanguageService,
             ChatClient.Builder chatClientBuilder
     ) {
         this.semanticSearchService =
                 semanticSearchService;
+
+        this.ragExplanationService =
+                ragExplanationService;
+
+        this.responseLanguageService =
+                responseLanguageService;
 
         this.chatClient =
                 chatClientBuilder.build();
@@ -96,13 +136,15 @@ public class RagService {
             List<ConversationMessage> conversationHistory,
             User currentUser
     ) {
-        validateQuestion(question);
+        validateQuestion(
+                question
+        );
 
         String normalizedQuestion =
                 question.trim();
 
-        String responseLanguage =
-                detectResponseLanguage(
+        ResponseLanguage responseLanguage =
+                responseLanguageService.detect(
                         normalizedQuestion
                 );
 
@@ -116,15 +158,7 @@ public class RagService {
                         normalizedQuestion
                 );
 
-        /*
-         * Specific questions:
-         *     semantic search
-         *
-         * Broad questions:
-         *     complete attached-document context when small enough,
-         *     otherwise broader semantic retrieval.
-         */
-        List<SemanticSearchResponse> sources =
+        RetrievalResult retrievalResult =
                 broadQuestion
                         ? retrieveBroadSources(
                         workspaceId,
@@ -139,13 +173,17 @@ public class RagService {
                         currentUser
                 );
 
+        List<SemanticSearchResponse> sources =
+                retrievalResult.sources();
+
         if (sources.isEmpty()) {
             return new RagAnswerResponse(
                     normalizedQuestion,
                     getNoRelevantInformationMessage(
                             responseLanguage
                     ),
-                    List.of()
+                    List.of(),
+                    null
             );
         }
 
@@ -168,10 +206,17 @@ public class RagService {
                         responseLanguage
                 );
 
+        RagExplanationResponse explanation =
+                ragExplanationService.build(
+                        retrievalResult.strategy(),
+                        sources
+                );
+
         return new RagAnswerResponse(
                 normalizedQuestion,
                 generatedAnswer,
-                sources
+                sources,
+                explanation
         );
     }
 
@@ -179,13 +224,8 @@ public class RagService {
      * ---------------------------------------------------------
      * SPECIFIC QUESTION RETRIEVAL
      * ---------------------------------------------------------
-     *
-     * Best for questions such as:
-     *
-     * "What does the document say about elephants?"
-     * "How do dolphins communicate?"
      */
-    private List<SemanticSearchResponse> retrieveSources(
+    private RetrievalResult retrieveSources(
             UUID workspaceId,
             String retrievalQuery,
             List<UUID> documentIds,
@@ -198,41 +238,36 @@ public class RagService {
 
         /*
          * No explicitly selected documents:
-         *
-         * Keep normal workspace-wide semantic retrieval.
+         * perform workspace-wide semantic retrieval.
          */
         if (uniqueDocumentIds.isEmpty()) {
-            return semanticSearchService.search(
-                    workspaceId,
-                    retrievalQuery,
-                    DEFAULT_RESULT_LIMIT,
-                    currentUser
+
+            List<SemanticSearchResponse> sources =
+                    semanticSearchService.search(
+                            workspaceId,
+                            retrievalQuery,
+                            DEFAULT_RESULT_LIMIT,
+                            currentUser
+                    );
+
+            return new RetrievalResult(
+                    sources,
+                    RetrievalStrategy
+                            .WORKSPACE_SEMANTIC_SEARCH
             );
         }
 
         /*
-         * Explicitly attached small document set:
-         *
-         * Ask for one more chunk than the configured limit so
-         * that we can determine whether the complete selected
-         * context actually fits.
-         *
-         * <= 10 chunks:
-         *     use the complete attached-document context.
-         *
-         * >= 11 chunks:
-         *     fall back to semantic retrieval.
-         *
-         * This prevents multi-part questions from losing an
-         * important fact simply because that fact appears in a
-         * slightly less similar chunk.
+         * Check whether the complete selected-document context
+         * is small enough to be supplied directly.
          */
         List<SemanticSearchResponse> fullContext =
                 semanticSearchService
                         .getDocumentContext(
                                 workspaceId,
                                 uniqueDocumentIds,
-                                MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS + 1,
+                                MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS
+                                        + 1,
                                 currentUser
                         );
 
@@ -240,44 +275,39 @@ public class RagService {
                 fullContext.size() <=
                         MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS) {
 
-            return fullContext;
+            return new RetrievalResult(
+                    fullContext,
+                    RetrievalStrategy
+                            .FULL_DOCUMENT_CONTEXT
+            );
         }
 
         /*
-         * Larger attached document sets:
-         *
-         * Keep bounded semantic retrieval so that the model is
-         * not flooded with unrelated context.
+         * Larger attached document sets use semantic retrieval.
          */
-        return semanticSearchService
-                .searchInDocumentsWithFallback(
-                        workspaceId,
-                        uniqueDocumentIds,
-                        retrievalQuery,
-                        ATTACHED_DOCUMENT_RESULT_LIMIT,
-                        currentUser
-                );
+        List<SemanticSearchResponse> sources =
+                semanticSearchService
+                        .searchInDocumentsWithFallback(
+                                workspaceId,
+                                uniqueDocumentIds,
+                                retrievalQuery,
+                                ATTACHED_DOCUMENT_RESULT_LIMIT,
+                                currentUser
+                        );
+
+        return new RetrievalResult(
+                sources,
+                RetrievalStrategy
+                        .SELECTED_DOCUMENT_SEMANTIC_SEARCH
+        );
     }
 
     /*
      * ---------------------------------------------------------
      * BROAD QUESTION RETRIEVAL
      * ---------------------------------------------------------
-     *
-     * Examples:
-     *
-     * "How many animals are described?"
-     * "List all animals."
-     * "What topics are covered?"
-     * "Summarize the document."
-     *
-     * For reasonably small attached documents, semantic
-     * similarity is the wrong tool because the user wants an
-     * overview of the whole document.
-     *
-     * Therefore load every chunk.
      */
-    private List<SemanticSearchResponse> retrieveBroadSources(
+    private RetrievalResult retrieveBroadSources(
             UUID workspaceId,
             String question,
             List<UUID> documentIds,
@@ -289,8 +319,8 @@ public class RagService {
                 );
 
         /*
-         * Direct RagService usage without explicitly attached
-         * documents still falls back to semantic search.
+         * Direct RagService use without explicit documents
+         * falls back to workspace semantic retrieval.
          */
         if (uniqueDocumentIds.isEmpty()) {
             return retrieveSources(
@@ -302,51 +332,50 @@ public class RagService {
         }
 
         /*
-         * Ask for one more chunk than our limit.
-         *
-         * Examples:
-         *
-         * 2 chunks returned
-         *     → complete context fits
-         *
-         * 30 chunks returned
-         *     → complete context fits
-         *
-         * 31 chunks returned
-         *     → document set is too large
+         * Ask for one more chunk than the configured limit
+         * to determine whether the complete context fits.
          */
         List<SemanticSearchResponse> fullContext =
                 semanticSearchService
                         .getDocumentContext(
                                 workspaceId,
                                 uniqueDocumentIds,
-                                MAX_FULL_DOCUMENT_CONTEXT_CHUNKS + 1,
+                                MAX_FULL_DOCUMENT_CONTEXT_CHUNKS
+                                        + 1,
                                 currentUser
                         );
 
         /*
-         * Small / medium selected documents:
-         *
-         * Give the LLM the complete document content.
+         * Small / medium selected document sets:
+         * use complete document context.
          */
         if (!fullContext.isEmpty() &&
                 fullContext.size() <=
                         MAX_FULL_DOCUMENT_CONTEXT_CHUNKS) {
 
-            return fullContext;
+            return new RetrievalResult(
+                    fullContext,
+                    RetrievalStrategy
+                            .FULL_DOCUMENT_CONTEXT
+            );
         }
 
         /*
-         * Large document set:
-         *
-         * Don't push potentially hundreds of chunks into the
-         * model. Fall back to multi-query semantic retrieval.
+         * Large selected document set:
+         * bounded multi-query semantic retrieval.
          */
-        return retrieveBroadSourcesSemantically(
-                workspaceId,
-                question,
-                uniqueDocumentIds,
-                currentUser
+        List<SemanticSearchResponse> sources =
+                retrieveBroadSourcesSemantically(
+                        workspaceId,
+                        question,
+                        uniqueDocumentIds,
+                        currentUser
+                );
+
+        return new RetrievalResult(
+                sources,
+                RetrievalStrategy
+                        .BROAD_MULTI_QUERY_SEMANTIC_SEARCH
         );
     }
 
@@ -354,13 +383,9 @@ public class RagService {
      * ---------------------------------------------------------
      * LARGE-DOCUMENT BROAD FALLBACK
      * ---------------------------------------------------------
-     *
-     * This is your previous broad-search implementation.
-     *
-     * It is now used only when the complete attached-document
-     * context exceeds MAX_FULL_DOCUMENT_CONTEXT_CHUNKS.
      */
-    private List<SemanticSearchResponse> retrieveBroadSourcesSemantically(
+    private List<SemanticSearchResponse>
+    retrieveBroadSourcesSemantically(
             UUID workspaceId,
             String question,
             List<UUID> documentIds,
@@ -395,12 +420,6 @@ public class RagService {
                     continue;
                 }
 
-                /*
-                 * The same chunk may be returned for more than
-                 * one retrieval formulation.
-                 *
-                 * Deduplicate using normalized content.
-                 */
                 String fingerprint =
                         normalizeSourceContent(
                                 source.content()
@@ -429,9 +448,8 @@ public class RagService {
                 );
 
         /*
-         * Broad questions are easier for the model when chunks
-         * appear in their natural document order rather than
-         * semantic-similarity order.
+         * Broad answers are easier for the LLM when chunks
+         * appear in their natural document order.
          */
         sources.sort(
                 (left, right) -> {
@@ -464,8 +482,13 @@ public class RagService {
         }
 
         return content
-                .toLowerCase(Locale.ROOT)
-                .replaceAll("\\s+", " ")
+                .toLowerCase(
+                        Locale.ROOT
+                )
+                .replaceAll(
+                        "\\s+",
+                        " "
+                )
                 .trim();
     }
 
@@ -476,9 +499,11 @@ public class RagService {
                 new ArrayList<>();
 
         /*
-         * Original wording.
+         * Original user wording.
          */
-        queries.add(question);
+        queries.add(
+                question
+        );
 
         /*
          * General coverage formulation.
@@ -490,7 +515,9 @@ public class RagService {
 
                 Retrieve names, entities, categories, examples,
                 facts, lists and descriptions related to the question.
-                """.formatted(question));
+                """.formatted(
+                question
+        ));
 
         /*
          * Inventory / overview formulation.
@@ -504,7 +531,9 @@ public class RagService {
                 Include distinct items, topics, subjects and
                 supporting information that may need to be combined
                 across multiple passages.
-                """.formatted(question));
+                """.formatted(
+                question
+        ));
 
         return queries;
     }
@@ -519,7 +548,7 @@ public class RagService {
             String conversationHistory,
             String documentContext,
             boolean broadQuestion,
-            String responseLanguage
+            ResponseLanguage responseLanguage
     ) {
         try {
             String questionMode =
@@ -577,6 +606,9 @@ public class RagService {
                             - Do not add unsupported details merely to make an answer
                               appear complete.
                             """;
+
+            String responseLanguageName =
+                    responseLanguage.promptName();
 
             String unavailableInformationMessage =
                     getUnavailableInformationMessage(
@@ -682,8 +714,8 @@ public class RagService {
                     - Keep answers readable and appropriately
                       detailed for the user's question.
                     """.formatted(
-                    responseLanguage,
-                    responseLanguage,
+                    responseLanguageName,
+                    responseLanguageName,
                     unavailableInformationMessage
             );
 
@@ -693,59 +725,59 @@ public class RagService {
                             .system(
                                     systemPrompt
                             )
-                            .user(user -> user
-                                    .text("""
-                                            Question mode:
+                            .user(user ->
+                                    user.text("""
+                                                    Question mode:
 
-                                            {mode}
+                                                    {mode}
 
-                                            Required response language:
+                                                    Required response language:
 
-                                            {language}
+                                                    {language}
 
-                                            Recent conversation history:
+                                                    Recent conversation history:
 
-                                            {history}
+                                                    {history}
 
-                                            Document context:
+                                                    Document context:
 
-                                            {context}
+                                                    {context}
 
-                                            Current user question:
+                                                    Current user question:
 
-                                            {question}
+                                                    {question}
 
-                                            Answer the current question using
-                                            only the supplied document context.
+                                                    Answer the current question using
+                                                    only the supplied document context.
 
-                                            IMPORTANT LANGUAGE REQUIREMENT:
-                                            - Answer in {language}.
-                                            - Translate ordinary/common source
-                                              terms into {language} where a natural
-                                              equivalent exists.
-                                            - Preserve proper names and official
-                                              identifiers when appropriate.
-                                            """)
-                                    .param(
-                                            "mode",
-                                            questionMode
-                                    )
-                                    .param(
-                                            "language",
-                                            responseLanguage
-                                    )
-                                    .param(
-                                            "history",
-                                            conversationHistory
-                                    )
-                                    .param(
-                                            "context",
-                                            documentContext
-                                    )
-                                    .param(
-                                            "question",
-                                            question
-                                    )
+                                                    IMPORTANT LANGUAGE REQUIREMENT:
+                                                    - Answer in {language}.
+                                                    - Translate ordinary/common source
+                                                      terms into {language} where a natural
+                                                      equivalent exists.
+                                                    - Preserve proper names and official
+                                                      identifiers when appropriate.
+                                                    """)
+                                            .param(
+                                                    "mode",
+                                                    questionMode
+                                            )
+                                            .param(
+                                                    "language",
+                                                    responseLanguageName
+                                            )
+                                            .param(
+                                                    "history",
+                                                    conversationHistory
+                                            )
+                                            .param(
+                                                    "context",
+                                                    documentContext
+                                            )
+                                            .param(
+                                                    "question",
+                                                    question
+                                            )
                             )
                             .call()
                             .content();
@@ -761,9 +793,11 @@ public class RagService {
             return answer.trim();
 
         } catch (ApiException exception) {
+
             throw exception;
 
         } catch (Exception exception) {
+
             throw new AiServiceUnavailableException(
                     "The local Ollama chat service is unavailable",
                     exception
@@ -812,12 +846,6 @@ public class RagService {
             return true;
         }
 
-        /*
-         * Examples:
-         *
-         * "What animals are mentioned?"
-         * "Which technologies are covered?"
-         */
         if ((normalized.startsWith("what ") ||
                 normalized.startsWith("which ")) &&
                 (
@@ -832,9 +860,6 @@ public class RagService {
             return true;
         }
 
-        /*
-         * Bulgarian.
-         */
         /*
          * Bulgarian.
          */
@@ -872,11 +897,14 @@ public class RagService {
     ) {
         if (documentIds == null ||
                 documentIds.isEmpty()) {
+
             return List.of();
         }
 
         return documentIds.stream()
-                .filter(Objects::nonNull)
+                .filter(
+                        Objects::nonNull
+                )
                 .distinct()
                 .toList();
     }
@@ -909,7 +937,8 @@ public class RagService {
                     )
                     .append(": ")
                     .append(
-                            message.content().trim()
+                            message.content()
+                                    .trim()
                     )
                     .append('\n');
         }
@@ -925,15 +954,19 @@ public class RagService {
         List<ConversationMessage> selected =
                 new ArrayList<>();
 
-        int characters = 0;
+        int characters =
+                0;
 
         for (
-                int index = history.size() - 1;
+                int index =
+                history.size() - 1;
                 index >= 0;
                 index--
         ) {
             ConversationMessage message =
-                    history.get(index);
+                    history.get(
+                            index
+                    );
 
             int messageLength =
                     message.content()
@@ -942,6 +975,7 @@ public class RagService {
             if (!selected.isEmpty() &&
                     characters + messageLength >
                             MAX_HISTORY_CHARACTERS) {
+
                 break;
             }
 
@@ -954,6 +988,7 @@ public class RagService {
 
             if (selected.size() >=
                     MAX_HISTORY_MESSAGES) {
+
                 break;
             }
         }
@@ -970,6 +1005,7 @@ public class RagService {
     ) {
         if (history == null ||
                 history.isEmpty()) {
+
             return List.of();
         }
 
@@ -998,6 +1034,7 @@ public class RagService {
     ) {
         if (sources == null ||
                 sources.isEmpty()) {
+
             return "";
         }
 
@@ -1053,7 +1090,7 @@ public class RagService {
             }
 
             /*
-             * Keep source numbering aligned with the sources
+             * Keep the source markers aligned with the list
              * returned to the frontend.
              */
             int originalSourceIndex =
@@ -1061,37 +1098,59 @@ public class RagService {
                             source
                     );
 
-            context.append("[Source ")
+            context.append(
+                            "[Source "
+                    )
                     .append(
                             originalSourceIndex + 1
                     )
-                    .append("]\n");
+                    .append(
+                            "]\n"
+                    );
 
-            context.append("Document ID: ")
+            context.append(
+                            "Document ID: "
+                    )
                     .append(
                             source.documentId()
                     )
-                    .append('\n');
+                    .append(
+                            '\n'
+                    );
 
-            context.append("Document: ")
+            context.append(
+                            "Document: "
+                    )
                     .append(
                             source.documentTitle()
                     )
-                    .append('\n');
+                    .append(
+                            '\n'
+                    );
 
-            context.append("Chunk index: ")
+            context.append(
+                            "Chunk index: "
+                    )
                     .append(
                             source.chunkIndex()
                     )
-                    .append('\n');
+                    .append(
+                            '\n'
+                    );
 
-            context.append("Content:\n")
-                    .append(content)
-                    .append("\n\n");
+            context.append(
+                            "Content:\n"
+                    )
+                    .append(
+                            content
+                    )
+                    .append(
+                            "\n\n"
+                    );
 
             /*
-             * Keep original chunk content because the following
-             * chunk overlaps the unmodified original.
+             * Preserve original content because overlap with
+             * the next chunk refers to the unmodified chunk.
              */
             previousByDocument.put(
                     source.documentId(),
@@ -1126,7 +1185,8 @@ public class RagService {
                         )
                 );
 
-        final int minimumOverlap = 30;
+        final int minimumOverlap =
+                30;
 
         for (
                 int overlapLength =
@@ -1136,8 +1196,8 @@ public class RagService {
                 overlapLength--
         ) {
             int previousStart =
-                    previousContent.length()
-                            - overlapLength;
+                    previousContent.length() -
+                            overlapLength;
 
             if (previousContent.regionMatches(
                     previousStart,
@@ -1145,6 +1205,7 @@ public class RagService {
                     0,
                     overlapLength
             )) {
+
                 return currentContent
                         .substring(
                                 overlapLength
@@ -1166,6 +1227,7 @@ public class RagService {
     ) {
         if (question == null ||
                 question.isBlank()) {
+
             throw new BadRequestException(
                     ApiErrorCodes.QUESTION_REQUIRED,
                     "Question cannot be empty"
@@ -1174,6 +1236,7 @@ public class RagService {
 
         if (question.length() >
                 MAX_QUESTION_LENGTH) {
+
             throw new BadRequestException(
                     ApiErrorCodes.QUESTION_TOO_LONG,
                     "Question cannot exceed " +
@@ -1183,59 +1246,55 @@ public class RagService {
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * LOCALIZED RESPONSES
+     * ---------------------------------------------------------
+     */
+    private String getNoRelevantInformationMessage(
+            ResponseLanguage responseLanguage
+    ) {
+        return switch (responseLanguage) {
+
+            case BULGARIAN ->
+                    "Не открих релевантна информация " +
+                            "в документите в работното пространство.";
+
+            case ENGLISH ->
+                    "I could not find relevant information " +
+                            "in the workspace documents.";
+        };
+    }
+
+    private String getUnavailableInformationMessage(
+            ResponseLanguage responseLanguage
+    ) {
+        return switch (responseLanguage) {
+
+            case BULGARIAN ->
+                    "Не открих тази информация " +
+                            "в предоставените документи.";
+
+            case ENGLISH ->
+                    "I could not find that information " +
+                            "in the provided documents.";
+        };
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * INTERNAL TYPES
+     * ---------------------------------------------------------
+     */
     private record PreviousChunk(
             Integer chunkIndex,
             String content
     ) {
     }
 
-    private String detectResponseLanguage(String question) {
-        if (question == null || question.isBlank()) {
-            return "English";
-        }
-
-        long cyrillicCharacters = question.chars()
-                .filter(character ->
-                        character >= '\u0400' &&
-                                character <= '\u04FF'
-                )
-                .count();
-
-        long latinCharacters = question.chars()
-                .filter(character ->
-                        (character >= 'A' && character <= 'Z') ||
-                                (character >= 'a' && character <= 'z')
-                )
-                .count();
-
-        if (cyrillicCharacters > latinCharacters) {
-            return "Bulgarian";
-        }
-
-        return "English";
-    }
-
-    private String getNoRelevantInformationMessage(
-            String responseLanguage
+    private record RetrievalResult(
+            List<SemanticSearchResponse> sources,
+            RetrievalStrategy strategy
     ) {
-        if ("Bulgarian".equals(
-                responseLanguage
-        )) {
-            return "Не открих релевантна информация в документите в работното пространство.";
-        }
-
-        return "I could not find relevant information in the workspace documents.";
-    }
-
-    private String getUnavailableInformationMessage(
-            String responseLanguage
-    ) {
-        if ("Bulgarian".equals(
-                responseLanguage
-        )) {
-            return "Не открих тази информация в предоставените документи.";
-        }
-
-        return "I could not find that information in the provided documents.";
     }
 }

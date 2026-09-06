@@ -395,3 +395,6 @@ CREATE INDEX idx_password_reset_tokens_expires_at
          workspace_id,
          created_at
      );
+
+ALTER TABLE chat_messages
+ADD COLUMN retrieval_strategy VARCHAR(50);
