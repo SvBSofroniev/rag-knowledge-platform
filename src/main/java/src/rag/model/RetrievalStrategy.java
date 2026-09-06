@@ -1,0 +1,12 @@
+package src.rag.model;
+
+public enum RetrievalStrategy {
+
+    WORKSPACE_SEMANTIC_SEARCH,
+
+    SELECTED_DOCUMENT_SEMANTIC_SEARCH,
+
+    FULL_DOCUMENT_CONTEXT,
+
+    BROAD_MULTI_QUERY_SEMANTIC_SEARCH
+}
