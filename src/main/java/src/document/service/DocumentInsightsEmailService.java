@@ -10,7 +10,6 @@ import src.document.util.DocumentStatus;
 import src.entity.User;
 import src.mail.service.MailService;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -19,6 +18,9 @@ public class DocumentInsightsEmailService {
 
     private final DocumentService
             documentService;
+
+    private final DocumentInsightsPdfService
+            documentInsightsPdfService;
 
     private final MailService
             mailService;
@@ -29,8 +31,8 @@ public class DocumentInsightsEmailService {
             User currentUser
     ) {
         /*
-         * This verifies that the authenticated user
-         * has access to the document.
+         * Verifies that the authenticated user has
+         * access to the requested document.
          */
         DocumentDetailsResponse document =
                 documentService
@@ -39,10 +41,9 @@ public class DocumentInsightsEmailService {
                                 currentUser
                         );
 
-        if (
-                document.status() !=
-                        DocumentStatus.READY
-        ) {
+        if (document.status() !=
+                DocumentStatus.READY) {
+
             throw new BadRequestException(
                     ApiErrorCodes.DOCUMENT_NOT_READY,
                     "AI insights can only be emailed for READY documents"
@@ -65,18 +66,45 @@ public class DocumentInsightsEmailService {
                         currentUser
                 );
 
-        mailService.sendTextEmail(
+        /*
+         * Generate the PDF from the insights that were
+         * already generated and sent by the frontend.
+         *
+         * No additional LLM request is performed here.
+         */
+        byte[] pdf =
+                documentInsightsPdfService.generate(
+                        document,
+                        request,
+                        currentUser
+                );
+
+        String attachmentFilename =
+                buildAttachmentFilename(
+                        document.title()
+                );
+
+        mailService.sendEmailWithPdfAttachment(
                 recipient,
                 subject,
-                body
+                body,
+                attachmentFilename,
+                pdf
         );
     }
 
+    /*
+     * ---------------------------------------------------------
+     * SUBJECT
+     * ---------------------------------------------------------
+     */
     private String buildSubject(
             DocumentDetailsResponse document,
             String language
     ) {
-        if (isBulgarian(language)) {
+        if (isBulgarian(
+                language
+        )) {
             return "OurVault AI анализ - " +
                     document.title();
         }
@@ -85,159 +113,123 @@ public class DocumentInsightsEmailService {
                 document.title();
     }
 
+    /*
+     * ---------------------------------------------------------
+     * EMAIL BODY
+     * ---------------------------------------------------------
+     *
+     * The detailed insights are intentionally kept in the
+     * attached PDF instead of being duplicated in the email.
+     */
     private String buildBody(
             DocumentDetailsResponse document,
             EmailDocumentInsightsRequest request,
             User currentUser
     ) {
-        boolean bulgarian =
-                isBulgarian(
-                        request.language()
-                );
+        if (isBulgarian(
+                request.language()
+        )) {
+            return """
+                    Здравейте, %s!
 
-        StringBuilder body =
-                new StringBuilder();
+                    AI анализът за документа „%s“ е готов.
 
-        if (bulgarian) {
-            body.append("Здравейте, ")
-                    .append(
-                            currentUser.getUsername()
-                    )
-                    .append("!\n\n");
+                    Работно пространство: %s
 
-            body.append(
-                    "Ето AI анализа, генериран от OurVault.\n\n"
+                    Към този имейл е приложен PDF отчет, съдържащ:
+                    • обобщение на документа;
+                    • ключови точки;
+                    • важни факти.
+
+                    PDF отчетът е генериран от вече създадения AI анализ в OurVault.
+
+                    Генерирано от OurVault
+                    """.formatted(
+                    safeUsername(
+                            currentUser
+                    ),
+                    document.title(),
+                    document.workspaceName()
             );
-
-            body.append("Документ: ")
-                    .append(
-                            document.title()
-                    )
-                    .append('\n');
-
-            body.append("Работно пространство: ")
-                    .append(
-                            document.workspaceName()
-                    )
-                    .append("\n\n");
-
-            body.append("ОБОБЩЕНИЕ\n");
-            body.append("--------------------\n");
-            body.append(
-                    request.summary().trim()
-            );
-            body.append("\n\n");
-
-            body.append("КЛЮЧОВИ ТОЧКИ\n");
-            body.append("--------------------\n");
-
-            appendNumberedList(
-                    body,
-                    request.keyPoints()
-            );
-
-            body.append('\n');
-
-            body.append("ВАЖНИ ФАКТИ\n");
-            body.append("--------------------\n");
-
-            appendNumberedList(
-                    body,
-                    request.importantFacts()
-            );
-
-            body.append(
-                    "\n\nГенерирано от OurVault"
-            );
-
-            return body.toString();
         }
 
-        body.append("Hello ")
-                .append(
-                        currentUser.getUsername()
-                )
-                .append(",\n\n");
+        return """
+                Hello %s!
 
-        body.append(
-                "Here are the AI insights generated by OurVault.\n\n"
+                The AI insights for "%s" are ready.
+
+                Workspace: %s
+
+                A PDF report is attached containing:
+                • document summary;
+                • key points;
+                • important facts.
+
+                The PDF report was generated from the AI insights already created in OurVault.
+
+                Generated by OurVault
+                """.formatted(
+                safeUsername(
+                        currentUser
+                ),
+                document.title(),
+                document.workspaceName()
         );
-
-        body.append("Document: ")
-                .append(
-                        document.title()
-                )
-                .append('\n');
-
-        body.append("Workspace: ")
-                .append(
-                        document.workspaceName()
-                )
-                .append("\n\n");
-
-        body.append("SUMMARY\n");
-        body.append("--------------------\n");
-        body.append(
-                request.summary().trim()
-        );
-        body.append("\n\n");
-
-        body.append("KEY POINTS\n");
-        body.append("--------------------\n");
-
-        appendNumberedList(
-                body,
-                request.keyPoints()
-        );
-
-        body.append('\n');
-
-        body.append("IMPORTANT FACTS\n");
-        body.append("--------------------\n");
-
-        appendNumberedList(
-                body,
-                request.importantFacts()
-        );
-
-        body.append(
-                "\n\nGenerated by OurVault"
-        );
-
-        return body.toString();
     }
 
-    private void appendNumberedList(
-            StringBuilder body,
-            List<String> values
+    /*
+     * ---------------------------------------------------------
+     * ATTACHMENT FILENAME
+     * ---------------------------------------------------------
+     */
+    private String buildAttachmentFilename(
+            String documentTitle
     ) {
-        if (
-                values == null ||
-                        values.isEmpty()
-        ) {
-            body.append("-\n");
-            return;
+        String safeTitle =
+                documentTitle == null
+                        ? ""
+                        : documentTitle
+                        .trim()
+                        .replaceAll(
+                                "[^\\p{L}\\p{N}._-]+",
+                                "_"
+                        )
+                        .replaceAll(
+                                "_+",
+                                "_"
+                        )
+                        .replaceAll(
+                                "^_+|_+$",
+                                ""
+                        );
+
+        if (safeTitle.isBlank()) {
+            safeTitle =
+                    "Document";
         }
 
-        for (
-                int index = 0;
-                index < values.size();
-                index++
-        ) {
-            body.append(
-                    index + 1
-            );
+        return "OurVault_" +
+                safeTitle +
+                "_Insights.pdf";
+    }
 
-            body.append(". ");
+    /*
+     * ---------------------------------------------------------
+     * HELPERS
+     * ---------------------------------------------------------
+     */
+    private String safeUsername(
+            User currentUser
+    ) {
+        if (currentUser.getUsername() == null ||
+                currentUser.getUsername()
+                        .isBlank()) {
 
-            body.append(
-                    values
-                            .get(index)
-                            .trim()
-            );
-
-            body.append('\n');
+            return currentUser.getEmail();
         }
+
+        return currentUser.getUsername()
+                .trim();
     }
 
     private boolean isBulgarian(

@@ -14,17 +14,29 @@ import src.document.util.DocumentStatus;
 import src.entity.User;
 import src.mail.service.MailService;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentInsightsEmailServiceTest {
 
+    private static final byte[] PDF_CONTENT =
+            new byte[]{
+                    1,
+                    2,
+                    3,
+                    4
+            };
+
     @Mock
     private DocumentService documentService;
+
+    @Mock
+    private DocumentInsightsPdfService
+            documentInsightsPdfService;
 
     @Mock
     private MailService mailService;
@@ -45,9 +57,11 @@ class DocumentInsightsEmailServiceTest {
 
     @BeforeEach
     void setUp() {
+
         documentInsightsEmailService =
                 new DocumentInsightsEmailService(
                         documentService,
+                        documentInsightsPdfService,
                         mailService
                 );
 
@@ -55,11 +69,17 @@ class DocumentInsightsEmailServiceTest {
                 UUID.randomUUID();
     }
 
+    /*
+     * ---------------------------------------------------------
+     * ACCESS AND STATUS
+     * ---------------------------------------------------------
+     */
     @Nested
     class AccessAndStatus {
 
         @Test
         void shouldVerifyDocumentAccessBeforeSendingEmail() {
+
             prepareEnglishEmail();
 
             documentInsightsEmailService
@@ -75,16 +95,28 @@ class DocumentInsightsEmailServiceTest {
                             currentUser
                     );
 
+            verify(documentInsightsPdfService)
+                    .generate(
+                            document,
+                            request,
+                            currentUser
+                    );
+
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             anyString(),
-                            anyString()
+                            anyString(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
         }
 
         @Test
         void shouldRejectDocumentThatIsNotReady() {
+
             when(
                     documentService.getDocumentDetails(
                             documentId,
@@ -118,6 +150,7 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verifyNoInteractions(
+                    documentInsightsPdfService,
                     mailService
             );
 
@@ -128,11 +161,17 @@ class DocumentInsightsEmailServiceTest {
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * RECIPIENT
+     * ---------------------------------------------------------
+     */
     @Nested
     class Recipient {
 
         @Test
         void shouldAlwaysSendToCurrentUsersEmail() {
+
             prepareEnglishEmail();
 
             when(
@@ -149,21 +188,57 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             eq(
                                     "authenticated-user@example.com"
                             ),
                             anyString(),
-                            anyString()
+                            anyString(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * PDF GENERATION
+     * ---------------------------------------------------------
+     */
     @Nested
-    class EnglishEmail {
+    class PdfGeneration {
 
         @Test
-        void shouldBuildEnglishSubject() {
+        void shouldGeneratePdfUsingExistingInsightsRequest() {
+
+            prepareEnglishEmail();
+
+            documentInsightsEmailService
+                    .sendInsights(
+                            documentId,
+                            request,
+                            currentUser
+                    );
+
+            verify(documentInsightsPdfService)
+                    .generate(
+                            same(
+                                    document
+                            ),
+                            same(
+                                    request
+                            ),
+                            same(
+                                    currentUser
+                            )
+                    );
+        }
+
+        @Test
+        void shouldSendGeneratedPdfAsAttachment() {
+
             prepareEnglishEmail();
 
             documentInsightsEmailService
@@ -174,17 +249,89 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
+                            anyString(),
+                            anyString(),
+                            anyString(),
+                            eq(
+                                    "OurVault_Test_Document_Insights.pdf"
+                            ),
+                            same(
+                                    PDF_CONTENT
+                            )
+                    );
+        }
+
+        @Test
+        void shouldCreateSafeAttachmentFilename() {
+
+            prepareEnglishEmail();
+
+            when(
+                    document.title()
+            ).thenReturn(
+                    "Security Report: 2026 / Final"
+            );
+
+            documentInsightsEmailService
+                    .sendInsights(
+                            documentId,
+                            request,
+                            currentUser
+                    );
+
+            verify(mailService)
+                    .sendEmailWithPdfAttachment(
+                            anyString(),
+                            anyString(),
+                            anyString(),
+                            eq(
+                                    "OurVault_Security_Report_2026_Final_Insights.pdf"
+                            ),
+                            same(
+                                    PDF_CONTENT
+                            )
+                    );
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * ENGLISH EMAIL
+     * ---------------------------------------------------------
+     */
+    @Nested
+    class EnglishEmail {
+
+        @Test
+        void shouldBuildEnglishSubject() {
+
+            prepareEnglishEmail();
+
+            documentInsightsEmailService
+                    .sendInsights(
+                            documentId,
+                            request,
+                            currentUser
+                    );
+
+            verify(mailService)
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             eq(
                                     "OurVault AI Insights - Test Document"
                             ),
-                            anyString()
+                            anyString(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
         }
 
         @Test
         void shouldBuildEnglishEmailBody() {
+
             prepareEnglishEmail();
 
             ArgumentCaptor<String> bodyCaptor =
@@ -200,10 +347,14 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             anyString(),
-                            bodyCaptor.capture()
+                            bodyCaptor.capture(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
 
             String body =
@@ -211,19 +362,13 @@ class DocumentInsightsEmailServiceTest {
 
             assertTrue(
                     body.contains(
-                            "Hello svetlin,"
+                            "Hello svetlin!"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "Here are the AI insights generated by OurVault."
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "Document: Test Document"
+                            "The AI insights for \"Test Document\" are ready."
                     )
             );
 
@@ -235,49 +380,25 @@ class DocumentInsightsEmailServiceTest {
 
             assertTrue(
                     body.contains(
-                            "SUMMARY"
+                            "A PDF report is attached containing:"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "This is the document summary."
+                            "document summary"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "KEY POINTS"
+                            "key points"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "1. First key point"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "2. Second key point"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "IMPORTANT FACTS"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "1. First important fact"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "2. Second important fact"
+                            "important facts"
                     )
             );
 
@@ -290,6 +411,7 @@ class DocumentInsightsEmailServiceTest {
 
         @Test
         void shouldDefaultToEnglishWhenLanguageIsNull() {
+
             prepareCommonReadyDocument();
 
             when(
@@ -298,8 +420,6 @@ class DocumentInsightsEmailServiceTest {
                     null
             );
 
-            prepareRequestContent();
-
             documentInsightsEmailService
                     .sendInsights(
                             documentId,
@@ -308,19 +428,24 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             eq(
                                     "OurVault AI Insights - Test Document"
                             ),
                             contains(
-                                    "SUMMARY"
+                                    "The AI insights for"
+                            ),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
                             )
                     );
         }
 
         @Test
         void shouldDefaultToEnglishForUnknownLanguage() {
+
             prepareCommonReadyDocument();
 
             when(
@@ -329,8 +454,6 @@ class DocumentInsightsEmailServiceTest {
                     "de"
             );
 
-            prepareRequestContent();
-
             documentInsightsEmailService
                     .sendInsights(
                             documentId,
@@ -339,23 +462,33 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             eq(
                                     "OurVault AI Insights - Test Document"
                             ),
                             contains(
-                                    "KEY POINTS"
+                                    "A PDF report is attached"
+                            ),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
                             )
                     );
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * BULGARIAN EMAIL
+     * ---------------------------------------------------------
+     */
     @Nested
     class BulgarianEmail {
 
         @Test
         void shouldBuildBulgarianSubject() {
+
             prepareBulgarianEmail();
 
             documentInsightsEmailService
@@ -366,17 +499,22 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             eq(
                                     "OurVault AI анализ - Test Document"
                             ),
-                            anyString()
+                            anyString(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
         }
 
         @Test
         void shouldBuildBulgarianEmailBody() {
+
             prepareBulgarianEmail();
 
             ArgumentCaptor<String> bodyCaptor =
@@ -392,10 +530,14 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             anyString(),
-                            bodyCaptor.capture()
+                            bodyCaptor.capture(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
 
             String body =
@@ -409,13 +551,7 @@ class DocumentInsightsEmailServiceTest {
 
             assertTrue(
                     body.contains(
-                            "Ето AI анализа, генериран от OurVault."
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "Документ: Test Document"
+                            "AI анализът за документа „Test Document“ е готов."
                     )
             );
 
@@ -427,37 +563,25 @@ class DocumentInsightsEmailServiceTest {
 
             assertTrue(
                     body.contains(
-                            "ОБОБЩЕНИЕ"
+                            "Към този имейл е приложен PDF отчет"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "This is the document summary."
+                            "обобщение на документа"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "КЛЮЧОВИ ТОЧКИ"
+                            "ключови точки"
                     )
             );
 
             assertTrue(
                     body.contains(
-                            "1. First key point"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "ВАЖНИ ФАКТИ"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "1. First important fact"
+                            "важни факти"
                     )
             );
 
@@ -470,6 +594,7 @@ class DocumentInsightsEmailServiceTest {
 
         @Test
         void shouldRecognizeBulgarianLocaleVariant() {
+
             prepareCommonReadyDocument();
 
             when(
@@ -478,8 +603,6 @@ class DocumentInsightsEmailServiceTest {
                     "  BG-bg  "
             );
 
-            prepareRequestContent();
-
             documentInsightsEmailService
                     .sendInsights(
                             documentId,
@@ -488,52 +611,39 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             eq(
                                     "OurVault AI анализ - Test Document"
                             ),
                             contains(
-                                    "ОБОБЩЕНИЕ"
+                                    "Към този имейл е приложен PDF отчет"
+                            ),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
                             )
                     );
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * USERNAME FALLBACK
+     * ---------------------------------------------------------
+     */
     @Nested
-    class InsightFormatting {
+    class UsernameFallback {
 
         @Test
-        void shouldTrimSummaryAndListItems() {
-            prepareCommonReadyDocument();
+        void shouldUseEmailWhenUsernameIsBlank() {
+
+            prepareEnglishEmail();
 
             when(
-                    request.language()
+                    currentUser.getUsername()
             ).thenReturn(
-                    "en"
-            );
-
-            when(
-                    request.summary()
-            ).thenReturn(
-                    "   Trimmed summary   "
-            );
-
-            when(
-                    request.keyPoints()
-            ).thenReturn(
-                    List.of(
-                            "   First point   ",
-                            "   Second point   "
-                    )
-            );
-
-            when(
-                    request.importantFacts()
-            ).thenReturn(
-                    List.of(
-                            "   Important fact   "
-                    )
+                    "   "
             );
 
             ArgumentCaptor<String> bodyCaptor =
@@ -549,135 +659,32 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             anyString(),
-                            bodyCaptor.capture()
+                            bodyCaptor.capture(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
 
-            String body =
-                    bodyCaptor.getValue();
-
             assertTrue(
-                    body.contains(
-                            "Trimmed summary"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "1. First point"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "2. Second point"
-                    )
-            );
-
-            assertTrue(
-                    body.contains(
-                            "1. Important fact"
-                    )
-            );
-
-            assertFalse(
-                    body.contains(
-                            "   Trimmed summary   "
-                    )
+                    bodyCaptor
+                            .getValue()
+                            .contains(
+                                    "Hello svetlin@example.com!"
+                            )
             );
         }
 
         @Test
-        void shouldUseDashWhenKeyPointsAreEmpty() {
-            prepareCommonReadyDocument();
+        void shouldUseEmailWhenUsernameIsNull() {
+
+            prepareEnglishEmail();
 
             when(
-                    request.language()
-            ).thenReturn(
-                    "en"
-            );
-
-            when(
-                    request.summary()
-            ).thenReturn(
-                    "Summary"
-            );
-
-            when(
-                    request.keyPoints()
-            ).thenReturn(
-                    List.of()
-            );
-
-            when(
-                    request.importantFacts()
-            ).thenReturn(
-                    List.of(
-                            "Fact"
-                    )
-            );
-
-            ArgumentCaptor<String> bodyCaptor =
-                    ArgumentCaptor.forClass(
-                            String.class
-                    );
-
-            documentInsightsEmailService
-                    .sendInsights(
-                            documentId,
-                            request,
-                            currentUser
-                    );
-
-            verify(mailService)
-                    .sendTextEmail(
-                            anyString(),
-                            anyString(),
-                            bodyCaptor.capture()
-                    );
-
-            String body =
-                    bodyCaptor.getValue();
-
-            assertTrue(
-                    body.contains(
-                            """
-                            KEY POINTS
-                            --------------------
-                            -
-                            """
-                    )
-            );
-        }
-
-        @Test
-        void shouldUseDashWhenImportantFactsAreNull() {
-            prepareCommonReadyDocument();
-
-            when(
-                    request.language()
-            ).thenReturn(
-                    "en"
-            );
-
-            when(
-                    request.summary()
-            ).thenReturn(
-                    "Summary"
-            );
-
-            when(
-                    request.keyPoints()
-            ).thenReturn(
-                    List.of(
-                            "Point"
-                    )
-            );
-
-            when(
-                    request.importantFacts()
+                    currentUser.getUsername()
             ).thenReturn(
                     null
             );
@@ -695,28 +702,33 @@ class DocumentInsightsEmailServiceTest {
                     );
 
             verify(mailService)
-                    .sendTextEmail(
+                    .sendEmailWithPdfAttachment(
                             anyString(),
                             anyString(),
-                            bodyCaptor.capture()
+                            bodyCaptor.capture(),
+                            anyString(),
+                            same(
+                                    PDF_CONTENT
+                            )
                     );
 
-            String body =
-                    bodyCaptor.getValue();
-
             assertTrue(
-                    body.contains(
-                            """
-                            IMPORTANT FACTS
-                            --------------------
-                            -
-                            """
-                    )
+                    bodyCaptor
+                            .getValue()
+                            .contains(
+                                    "Hello svetlin@example.com!"
+                            )
             );
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * HELPERS
+     * ---------------------------------------------------------
+     */
     private void prepareEnglishEmail() {
+
         prepareCommonReadyDocument();
 
         when(
@@ -724,11 +736,10 @@ class DocumentInsightsEmailServiceTest {
         ).thenReturn(
                 "en"
         );
-
-        prepareRequestContent();
     }
 
     private void prepareBulgarianEmail() {
+
         prepareCommonReadyDocument();
 
         when(
@@ -736,11 +747,10 @@ class DocumentInsightsEmailServiceTest {
         ).thenReturn(
                 "bg"
         );
-
-        prepareRequestContent();
     }
 
     private void prepareCommonReadyDocument() {
+
         when(
                 documentService.getDocumentDetails(
                         documentId,
@@ -779,31 +789,15 @@ class DocumentInsightsEmailServiceTest {
         ).thenReturn(
                 "svetlin"
         );
-    }
-
-    private void prepareRequestContent() {
-        when(
-                request.summary()
-        ).thenReturn(
-                "This is the document summary."
-        );
 
         when(
-                request.keyPoints()
-        ).thenReturn(
-                List.of(
-                        "First key point",
-                        "Second key point"
+                documentInsightsPdfService.generate(
+                        document,
+                        request,
+                        currentUser
                 )
-        );
-
-        when(
-                request.importantFacts()
         ).thenReturn(
-                List.of(
-                        "First important fact",
-                        "Second important fact"
-                )
+                PDF_CONTENT
         );
     }
 }
