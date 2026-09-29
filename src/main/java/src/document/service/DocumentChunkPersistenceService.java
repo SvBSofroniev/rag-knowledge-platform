@@ -32,10 +32,7 @@ public class DocumentChunkPersistenceService {
     ) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                ApiErrorCodes.DOCUMENT_NOT_FOUND,
-                                "Document not found"
-                        )
+                        new ResourceNotFoundException(ApiErrorCodes.DOCUMENT_NOT_FOUND, "Document not found")
                 );
 
         chunkRepository.deleteByDocument(document);
@@ -48,25 +45,20 @@ public class DocumentChunkPersistenceService {
                 continue;
             }
 
-            float[] embedding =
-                    embeddingService.generateEmbedding(content);
+            float[] embedding = embeddingService.generateEmbedding(content);
 
             DocumentChunk chunk = new DocumentChunk();
             chunk.setDocument(document);
             chunk.setChunkIndex(chunks.size());
             chunk.setContent(content);
-            chunk.setTokenCount(
-                    tokenCountEstimator.estimate(content)
-            );
+            chunk.setTokenCount(tokenCountEstimator.estimate(content));
             chunk.setEmbedding(embedding);
 
             chunks.add(chunk);
         }
 
         if (chunks.isEmpty()) {
-            throw new DocumentProcessingException(
-                    "No valid document chunks were generated"
-            );
+            throw new DocumentProcessingException("No valid document chunks were generated");
         }
 
         chunkRepository.saveAll(chunks);

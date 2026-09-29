@@ -60,30 +60,20 @@ public class DocumentTextExtractor {
     public String extract(
             Document document
     ) {
-        validateDocument(
-                document
-        );
+        validateDocument(document);
 
-        Path path =
-                resolveStoragePath(
-                        document.getStoragePath()
-                );
+        Path path = resolveStoragePath(document.getStoragePath());
 
-        validateStoredFile(
-                path
-        );
+        validateStoredFile(path);
 
-        String extension =
-                getExtension(
-                        document.getOriginalFilename()
-                );
+        String extension = getExtension(document.getOriginalFilename());
 
         /*
          * PDFs are intentionally handled separately.
          *
          * We do NOT use Tika first for PDFs because Tika may
          * invoke its own OCR integration. That would bypass
-         * the OCR configuration managed by OcrService.
+         * the OCR(Optical Character Recognition) configuration managed by OcrService.
          *
          * Instead:
          *
@@ -94,10 +84,7 @@ public class DocumentTextExtractor {
          * OcrService -> configured Tesseract OCR
          */
         if ("pdf".equals(extension)) {
-            return extractPdf(
-                    document,
-                    path
-            );
+            return extractPdf(document, path);
         }
 
         /*
@@ -107,18 +94,10 @@ public class DocumentTextExtractor {
          * normally contain an actual machine-readable
          * text layer and do not need the PDF OCR fallback.
          */
-        String tikaText =
-                extractWithTika(
-                        document,
-                        path
-                );
+        String tikaText = extractWithTika(document, path);
 
-        if (!hasAnyText(
-                tikaText
-        )) {
-            throw new DocumentProcessingException(
-                    "Document contains no extractable text"
-            );
+        if (!hasAnyText(tikaText)) {
+            throw new DocumentProcessingException("Document contains no extractable text");
         }
 
         return tikaText.trim();
@@ -131,18 +110,12 @@ public class DocumentTextExtractor {
         /*
          * First inspect only the PDF's native text layer.
          */
-        String nativeText =
-                extractNativePdfText(
-                        document,
-                        path
-                );
+        String nativeText = extractNativePdfText(document, path);
 
         /*
          * Normal text-based PDF.
          */
-        if (hasMeaningfulPdfText(
-                nativeText
-        )) {
+        if (hasMeaningfulPdfText(nativeText)) {
             log.info(
                     "PDF native text layer detected: file={}, characters={}",
                     document.getOriginalFilename(),
@@ -169,17 +142,10 @@ public class DocumentTextExtractor {
                 document.getOriginalFilename()
         );
 
-        String ocrText =
-                ocrService.extractPdf(
-                        path
-                );
+        String ocrText = ocrService.extractPdf(path);
 
-        if (!hasAnyText(
-                ocrText
-        )) {
-            throw new DocumentProcessingException(
-                    "OCR produced no usable text"
-            );
+        if (!hasAnyText(ocrText)) {
+            throw new DocumentProcessingException("OCR produced no usable text");
         }
 
         log.info(

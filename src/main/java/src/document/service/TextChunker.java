@@ -12,32 +12,20 @@ public class TextChunker {
     private static final int DEFAULT_OVERLAP = 200;
 
     public List<String> chunk(String text) {
-        return chunk(
-                text,
-                DEFAULT_CHUNK_SIZE,
-                DEFAULT_OVERLAP
-        );
+        return chunk(text, DEFAULT_CHUNK_SIZE, DEFAULT_OVERLAP);
     }
 
-    public List<String> chunk(
-            String text,
-            int chunkSize,
-            int overlap
-    ) {
+    public List<String> chunk(String text, int chunkSize, int overlap) {
         if (text == null || text.isBlank()) {
             return List.of();
         }
 
         if (chunkSize <= 0) {
-            throw new IllegalArgumentException(
-                    "Chunk size must be greater than zero"
-            );
+            throw new IllegalArgumentException("Chunk size must be greater than zero");
         }
 
         if (overlap < 0 || overlap >= chunkSize) {
-            throw new IllegalArgumentException(
-                    "Overlap must be non-negative and smaller than chunk size"
-            );
+            throw new IllegalArgumentException("Overlap must be non-negative and smaller than chunk size");
         }
 
         String normalizedText = normalize(text);

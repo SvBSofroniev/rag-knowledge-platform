@@ -62,9 +62,7 @@ public class OcrService {
 
     public String extractPdf(Path pdfPath) {
         if (!enabled) {
-            throw new DocumentProcessingException(
-                    "OCR processing is disabled"
-            );
+            throw new DocumentProcessingException("OCR processing is disabled");
         }
 
         validateConfiguration();
@@ -72,18 +70,11 @@ public class OcrService {
         Path temporaryDirectory = null;
 
         try {
-            temporaryDirectory =
-                    Files.createTempDirectory(
-                            "ourvault-ocr-"
-                    );
+            temporaryDirectory = Files.createTempDirectory("ourvault-ocr-");
 
-            try (PDDocument pdfDocument =
-                         Loader.loadPDF(
-                                 pdfPath.toFile()
-                         )) {
+            try (PDDocument pdfDocument = Loader.loadPDF(pdfPath.toFile())) {
 
-                int pageCount =
-                        pdfDocument.getNumberOfPages();
+                int pageCount = pdfDocument.getNumberOfPages();
 
                 if (pageCount == 0) {
                     throw new DocumentProcessingException(
@@ -170,9 +161,7 @@ public class OcrService {
             );
 
         } finally {
-            deleteTemporaryDirectory(
-                    temporaryDirectory
-            );
+            deleteTemporaryDirectory(temporaryDirectory);
         }
     }
 
@@ -182,13 +171,9 @@ public class OcrService {
             Path temporaryDirectory
     ) throws IOException {
 
-        int humanPageNumber =
-                pageIndex + 1;
+        int humanPageNumber = pageIndex + 1;
 
-        log.debug(
-                "OCR rendering page {}",
-                humanPageNumber
-        );
+        log.debug("OCR rendering page {}", humanPageNumber);
 
         BufferedImage pageImage =
                 renderer.renderImageWithDPI(

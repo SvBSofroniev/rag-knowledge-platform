@@ -6,17 +6,12 @@ import src.common.language.ResponseLanguage;
 @Service
 public class ResponseLanguageService {
 
-    public ResponseLanguage detect(
-            String text
-    ) {
-        if (text == null ||
-                text.isBlank()) {
-
+    public ResponseLanguage detect(String text) {
+        if (text == null || text.isBlank()) {
             return ResponseLanguage.ENGLISH;
         }
 
-        long cyrillicCharacters =
-                text.codePoints()
+        long cyrillicCharacters = text.codePoints()
                         .filter(character ->
                                 character >= '\u0400' &&
                                         character <= '\u04FF'
@@ -33,9 +28,7 @@ public class ResponseLanguageService {
                         )
                         .count();
 
-        if (cyrillicCharacters >
-                latinCharacters) {
-
+        if (cyrillicCharacters > latinCharacters) {
             return ResponseLanguage.BULGARIAN;
         }
 

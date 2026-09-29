@@ -30,56 +30,42 @@ import java.util.UUID;
 @Service
 public class RagService {
 
-    private static final int DEFAULT_RESULT_LIMIT =
-            5;
+    private static final int DEFAULT_RESULT_LIMIT = 5;
 
-    private static final int ATTACHED_DOCUMENT_RESULT_LIMIT =
-            10;
+    private static final int ATTACHED_DOCUMENT_RESULT_LIMIT = 10;
 
     /*
      * For small explicitly attached document sets, providing the
      * complete context is both affordable and more reliable than
      * semantic retrieval alone.
      */
-    private static final int
-            MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS =
-            10;
+    private static final int MAX_FULL_CONTEXT_FOR_SPECIFIC_QUESTION_CHUNKS = 10;
 
     /*
      * Broad questions use the complete attached-document context
      * when the selected documents are reasonably small.
      */
-    private static final int
-            MAX_FULL_DOCUMENT_CONTEXT_CHUNKS =
-            30;
+    private static final int MAX_FULL_DOCUMENT_CONTEXT_CHUNKS = 30;
 
     /*
      * If the selected documents are too large for full context,
      * broad semantic retrieval stays bounded.
      */
-    private static final int BROAD_RESULT_LIMIT =
-            12;
+    private static final int BROAD_RESULT_LIMIT = 12;
 
-    private static final int MAX_QUESTION_LENGTH =
-            5_000;
+    private static final int MAX_QUESTION_LENGTH = 5_000;
 
-    private static final int MAX_HISTORY_MESSAGES =
-            10;
+    private static final int MAX_HISTORY_MESSAGES = 10;
 
-    private static final int MAX_HISTORY_CHARACTERS =
-            4_000;
+    private static final int MAX_HISTORY_CHARACTERS = 4_000;
 
-    private final SemanticSearchService
-            semanticSearchService;
+    private final SemanticSearchService semanticSearchService;
 
-    private final RagExplanationService
-            ragExplanationService;
+    private final RagExplanationService ragExplanationService;
 
-    private final ResponseLanguageService
-            responseLanguageService;
+    private final ResponseLanguageService responseLanguageService;
 
-    private final ChatClient
-            chatClient;
+    private final ChatClient chatClient;
 
     public RagService(
             SemanticSearchService semanticSearchService,
@@ -87,43 +73,20 @@ public class RagService {
             ResponseLanguageService responseLanguageService,
             ChatClient.Builder chatClientBuilder
     ) {
-        this.semanticSearchService =
-                semanticSearchService;
+        this.semanticSearchService = semanticSearchService;
 
-        this.ragExplanationService =
-                ragExplanationService;
+        this.ragExplanationService = ragExplanationService;
 
-        this.responseLanguageService =
-                responseLanguageService;
+        this.responseLanguageService = responseLanguageService;
 
-        this.chatClient =
-                chatClientBuilder.build();
+        this.chatClient = chatClientBuilder.build();
     }
 
-    public RagAnswerResponse answer(
-            UUID workspaceId,
-            String question,
-            User currentUser
-    ) {
+    public RagAnswerResponse answer(UUID workspaceId, String question, User currentUser) {
         return answer(
                 workspaceId,
                 question,
                 List.of(),
-                List.of(),
-                currentUser
-        );
-    }
-
-    public RagAnswerResponse answer(
-            UUID workspaceId,
-            String question,
-            List<UUID> documentIds,
-            User currentUser
-    ) {
-        return answer(
-                workspaceId,
-                question,
-                documentIds,
                 List.of(),
                 currentUser
         );
@@ -136,27 +99,15 @@ public class RagService {
             List<ConversationMessage> conversationHistory,
             User currentUser
     ) {
-        validateQuestion(
-                question
-        );
+        validateQuestion(question);
 
-        String normalizedQuestion =
-                question.trim();
+        String normalizedQuestion = question.trim();
 
-        ResponseLanguage responseLanguage =
-                responseLanguageService.detect(
-                        normalizedQuestion
-                );
+        ResponseLanguage responseLanguage = responseLanguageService.detect(normalizedQuestion);
 
-        List<ConversationMessage> normalizedHistory =
-                normalizeHistory(
-                        conversationHistory
-                );
+        List<ConversationMessage> normalizedHistory = normalizeHistory(conversationHistory);
 
-        boolean broadQuestion =
-                isBroadQuestion(
-                        normalizedQuestion
-                );
+        boolean broadQuestion = isBroadQuestion(normalizedQuestion);
 
         RetrievalResult retrievalResult =
                 broadQuestion
@@ -173,8 +124,7 @@ public class RagService {
                         currentUser
                 );
 
-        List<SemanticSearchResponse> sources =
-                retrievalResult.sources();
+        List<SemanticSearchResponse> sources = retrievalResult.sources();
 
         if (sources.isEmpty()) {
             return new RagAnswerResponse(
@@ -187,18 +137,11 @@ public class RagService {
             );
         }
 
-        String documentContext =
-                buildDocumentContext(
-                        sources
-                );
+        String documentContext = buildDocumentContext(sources);
 
-        String historyContext =
-                buildConversationHistory(
-                        normalizedHistory
-                );
+        String historyContext = buildConversationHistory(normalizedHistory);
 
-        String generatedAnswer =
-                generateAnswer(
+        String generatedAnswer = generateAnswer(
                         normalizedQuestion,
                         historyContext,
                         documentContext,
@@ -206,11 +149,7 @@ public class RagService {
                         responseLanguage
                 );
 
-        RagExplanationResponse explanation =
-                ragExplanationService.build(
-                        retrievalResult.strategy(),
-                        sources
-                );
+        RagExplanationResponse explanation = ragExplanationService.build(retrievalResult.strategy(), sources);
 
         return new RagAnswerResponse(
                 normalizedQuestion,
@@ -313,10 +252,7 @@ public class RagService {
             List<UUID> documentIds,
             User currentUser
     ) {
-        List<UUID> uniqueDocumentIds =
-                normalizeDocumentIds(
-                        documentIds
-                );
+        List<UUID> uniqueDocumentIds = normalizeDocumentIds(documentIds);
 
         /*
          * Direct RagService use without explicit documents
@@ -607,13 +543,9 @@ public class RagService {
                               appear complete.
                             """;
 
-            String responseLanguageName =
-                    responseLanguage.promptName();
+            String responseLanguageName = responseLanguage.promptName();
 
-            String unavailableInformationMessage =
-                    getUnavailableInformationMessage(
-                            responseLanguage
-                    );
+            String unavailableInformationMessage = getUnavailableInformationMessage(responseLanguage);
 
             String systemPrompt = """
                     You are the OurVault knowledge-base assistant.
@@ -719,14 +651,9 @@ public class RagService {
                     unavailableInformationMessage
             );
 
-            String answer =
-                    chatClient
-                            .prompt()
-                            .system(
-                                    systemPrompt
-                            )
-                            .user(user ->
-                                    user.text("""
+            String answer = chatClient.prompt()
+                            .system(systemPrompt)
+                            .user(user -> user.text("""
                                                     Question mode:
 
                                                     {mode}
@@ -782,8 +709,7 @@ public class RagService {
                             .call()
                             .content();
 
-            if (answer == null ||
-                    answer.isBlank()) {
+            if (answer == null || answer.isBlank()) {
 
                 throw new AiModelResponseException(
                         "The chat model returned an empty response"
@@ -813,12 +739,7 @@ public class RagService {
     private boolean isBroadQuestion(
             String question
     ) {
-        String normalized =
-                question
-                        .toLowerCase(
-                                Locale.ROOT
-                        )
-                        .trim();
+        String normalized = question.toLowerCase(Locale.ROOT).trim();
 
         /*
          * English.
@@ -1032,9 +953,7 @@ public class RagService {
     private String buildDocumentContext(
             List<SemanticSearchResponse> sources
     ) {
-        if (sources == null ||
-                sources.isEmpty()) {
-
+        if (sources == null || sources.isEmpty()) {
             return "";
         }
 
@@ -1266,18 +1185,11 @@ public class RagService {
         };
     }
 
-    private String getUnavailableInformationMessage(
-            ResponseLanguage responseLanguage
-    ) {
+    private String getUnavailableInformationMessage(ResponseLanguage responseLanguage) {
         return switch (responseLanguage) {
 
-            case BULGARIAN ->
-                    "Не открих тази информация " +
-                            "в предоставените документи.";
-
-            case ENGLISH ->
-                    "I could not find that information " +
-                            "in the provided documents.";
+            case BULGARIAN -> "Не открих тази информация в предоставените документи.";
+            case ENGLISH -> "I could not find that information in the provided documents.";
         };
     }
 

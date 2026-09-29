@@ -46,52 +46,29 @@ public class DocumentProcessingService {
                 );
             }
 
-            chunkPersistenceService.replaceChunks(
-                    documentId,
-                    chunks
-            );
-
+            chunkPersistenceService.replaceChunks(documentId, chunks);
             statusService.markReady(documentId);
-
         } catch (Exception exception) {
-            statusService.markFailed(
-                    documentId,
-                    getErrorMessage(exception)
-            );
-
-            /*
-             * Do not rethrow for the initial synchronous MVP.
-             * The upload request can return a document with FAILED status.
-             */
+            statusService.markFailed(documentId, getErrorMessage(exception));
         }
     }
 
     private Document getDocument(UUID documentId) {
         return documentRepository
                 .findById(documentId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                                 ApiErrorCodes.DOCUMENT_NOT_FOUND,
                                 "Document not found"
                         )
                 );
     }
 
-    private void validateStatus(
-            Document document
-    ) {
-        if (document.getStatus() ==
-                DocumentStatus.PROCESSING) {
-
-            throw new ConflictException(
-                    ApiErrorCodes.DOCUMENT_ALREADY_PROCESSING,
-                    "Document is already being processed"
-            );
+    private void validateStatus(Document document) {
+        if (document.getStatus() == DocumentStatus.PROCESSING) {
+            throw new ConflictException(ApiErrorCodes.DOCUMENT_ALREADY_PROCESSING, "Document is already being processed");
         }
 
-        if (document.getStatus() ==
-                DocumentStatus.READY) {
-
+        if (document.getStatus() == DocumentStatus.READY) {
             throw new ConflictException(
                     ApiErrorCodes.DOCUMENT_ALREADY_PROCESSED,
                     "Document has already been processed"
