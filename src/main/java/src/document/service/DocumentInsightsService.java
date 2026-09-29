@@ -37,14 +37,14 @@ public class DocumentInsightsService {
      * Small/medium documents can be sent directly to Gemma.
      */
     private static final int DIRECT_CONTEXT_MAX_CHARACTERS =
-            24_000;
+            12_000;
 
     /*
      * Large documents are summarized in smaller batches first,
      * then those summaries are combined into the final insights.
      */
     private static final int BATCH_MAX_CHARACTERS =
-            18_000;
+            10_000;
 
     /*
      * Keep structured insights deliberately compact.
@@ -61,9 +61,9 @@ public class DocumentInsightsService {
      * These apply only to DocumentInsightsService and therefore
      * do not change the existing RAG/chat generation behavior.
      */
-    private static final int INSIGHTS_CONTEXT_SIZE = 8_192;
+    private static final int INSIGHTS_CONTEXT_SIZE = 16_384;
     private static final int FINAL_INSIGHTS_MAX_TOKENS = 2_048;
-    private static final int RETRY_INSIGHTS_MAX_TOKENS = 1_200;
+    private static final int RETRY_INSIGHTS_MAX_TOKENS = 1_600;
     private static final int BATCH_SUMMARY_MAX_TOKENS = 1_200;
 
     private final DocumentService documentService;
@@ -273,6 +273,11 @@ public class DocumentInsightsService {
         }
 
         try {
+            log.info(
+                    "Raw first document insights response:\n{}",
+                    firstResponse
+            );
+
             return parseInsights(
                     firstResponse
             );
@@ -311,6 +316,11 @@ public class DocumentInsightsService {
         }
 
         try {
+            log.info(
+                    "Raw retry document insights response:\n{}",
+                    retryResponse
+            );
+
             return parseInsights(
                     retryResponse
             );
@@ -592,10 +602,13 @@ public class DocumentInsightsService {
         DocumentInsightsResponse insights;
 
         try {
+            String normalizedResponse =
+                    extractJsonObject(response);
+
             insights =
                     insightsOutputConverter
                             .convert(
-                                    response
+                                    normalizedResponse
                             );
 
         } catch (Exception exception) {
@@ -632,6 +645,42 @@ public class DocumentInsightsService {
                 keyPoints,
                 importantFacts
         );
+    }
+
+    private String extractJsonObject(
+            String response
+    ) {
+        if (response == null ||
+                response.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Document insights response is empty"
+            );
+        }
+
+        String normalized =
+                response.trim();
+
+        int jsonStart =
+                normalized.indexOf('{');
+
+        int jsonEnd =
+                normalized.lastIndexOf('}');
+
+        if (jsonStart < 0 ||
+                jsonEnd <= jsonStart) {
+
+            throw new IllegalArgumentException(
+                    "Document insights response does not contain a complete JSON object"
+            );
+        }
+
+        return normalized
+                .substring(
+                        jsonStart,
+                        jsonEnd + 1
+                )
+                .trim();
     }
 
     private List<String> normalizeInsightItems(

@@ -15,9 +15,13 @@ public class DocumentIngestionService {
     private final DocumentService documentService;
     private final DocumentProcessingService documentProcessingService;
 
-    public DocumentResponse ingest(UUID workspaceId, MultipartFile file, User currentUser) {
+    public DocumentResponse ingest(
+            UUID workspaceId,
+            MultipartFile file,
+            User currentUser
+    ) {
         DocumentResponse createdDocument = documentService.uploadDocument(workspaceId, file, currentUser);
         documentProcessingService.processDocument(createdDocument.id());
-        return documentService.getDocument(createdDocument.id(), currentUser);
+        return createdDocument;
     }
 }

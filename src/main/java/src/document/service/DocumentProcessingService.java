@@ -1,6 +1,7 @@
 package src.document.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import src.common.exception.ApiErrorCodes;
 import src.common.exception.ConflictException;
@@ -23,6 +24,7 @@ public class DocumentProcessingService {
     private final DocumentChunkPersistenceService chunkPersistenceService;
     private final DocumentStatusService statusService;
 
+    @Async("documentProcessingExecutor")
     public void processDocument(UUID documentId) {
         Document document = getDocument(documentId);
 
