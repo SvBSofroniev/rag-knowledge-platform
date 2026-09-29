@@ -72,44 +72,22 @@ public class ChatMessageService {
             SendChatMessageRequest request,
             User currentUser
     ) {
-        validateRequest(
-                request
-        );
+        validateRequest(request);
 
-        ChatSession session =
-                chatSessionService
-                        .getAccessibleSession(
-                                sessionId,
-                                currentUser
-                        );
+        ChatSession session = chatSessionService.getAccessibleSession(sessionId, currentUser);
 
-        String question =
-                request.message()
-                        .trim();
+        String question = request.message().trim();
 
         /*
          * Load previous messages before saving the current
          * question so that it is not duplicated in the
          * conversation history sent to RAG.
          */
-        List<ConversationMessage> conversationHistory =
-                loadRecentConversation(
-                        session
-                );
+        List<ConversationMessage> conversationHistory = loadRecentConversation(session);
 
-        ChatMessage userMessage =
-                saveMessage(
-                        session,
-                        SenderType.USER,
-                        question
-                );
+        ChatMessage userMessage = saveMessage(session, SenderType.USER, question);
 
-        List<UUID> attachedDocumentIds =
-                chatDocumentContextService
-                        .getAttachedDocumentIds(
-                                sessionId,
-                                currentUser
-                        );
+        List<UUID> attachedDocumentIds = chatDocumentContextService.getAttachedDocumentIds(sessionId, currentUser);
 
         /*
          * RAG requires at least one attached document.
